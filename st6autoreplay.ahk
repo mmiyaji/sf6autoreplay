@@ -99,7 +99,11 @@ global gLoopCount := 0
 ; ============================================================
 main := Gui("+Resize +MinSize740x250", "SF6 自動リプレイ")
 main.SetFont("s9")
-
+global IconPath := A_ScriptDir "\icons\rec_icon.ico"
+if FileExist(IconPath) {
+    ; main.SetIcon(IconPath)
+    TraySetIcon(IconPath)
+}
 tab := main.Add("Tab3", "x10 y10 w700 h440", ["基本設定","詳細設定","ログ"])
 
 ; -------------------- 基本設定タブ --------------------
@@ -841,27 +845,23 @@ TruncForStatus(msg, maxChars := 60) {
 }
 Log(msg) {
     global LogEnabled, LogDir, logBox
-    ; 画面（ログタブ）へ追記（末尾へ自動スクロール）
     if IsSet(logBox) && logBox {
         try {
             logBox.Value .= FormatTime(A_Now, "HH:mm:ss") " - " msg "`r`n"
             static EM_SETSEL := 0x00B1, EM_SCROLLCARET := 0x00B7
-            SendMessage EM_SETSEL, -1, -1, , logBox.Hwnd
-            SendMessage EM_SCROLLCARET, 0, 0, , logBox.Hwnd
+            hwnd := logBox.Hwnd
+            ; 末尾にキャレットを置く → その位置までスクロール
+            SendMessage EM_SETSEL, -1, -1, , "ahk_id " hwnd
+            SendMessage EM_SCROLLCARET, 0, 0, , "ahk_id " hwnd
         }
     }
-    ; 最新行を下部ステータスへ
-    SetStatus("最新: " TruncForStatus(msg))
 
     if !LogEnabled
         return
-    ; ファイルへ
     try {
         DirCreate(LogDir)
         stamp := FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss")
         file := LogDir "\" FormatTime(A_Now, "yyyyMMdd") ".log"
         FileAppend(stamp " - " msg "`r`n", file, "UTF-8-RAW")
-    } catch as e {
-        ; 失敗は握りつぶし
     }
 }
