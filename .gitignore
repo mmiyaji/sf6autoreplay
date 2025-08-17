@@ -34,7 +34,6 @@ autom4te.cache
 
 /libtool
 /ltmain.sh
-.libs/
 
 # http://www.gnu.org/software/texinfo
 
@@ -55,3 +54,8 @@ m4/lt~obsolete.m4
 Makefile
 
 *.ini
+old_*
+
+/results
+/tools
+/snapshots
