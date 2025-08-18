@@ -10,6 +10,7 @@
 #SingleInstance Force
 #Requires AutoHotkey v2.0
 #Include %A_ScriptDir%\libs\OCR.ahk
+#Include %A_ScriptDir%\libs\ps_capture.ahk
 ; ============================================================
 ; 変数定義
 ; ============================================================
@@ -318,7 +319,6 @@ btnSnapDir.OnEvent("Click", (*) => (
     dir ? (edtSnapDir.Value := dir, ResultSnapDir := dir) : ""
 ))
 chkSnap := main.Add("CheckBox", "x380 y150 w270", "マッチリザルト画面をキャプチャ保存")
-main.Add("Text", "x380 y170 w300", "MiniCap.exeをダウンロードしtools/配下に配置してください")
 chkSnap.Value := ResultSnapEnabled ? 1 : 0
 chkSnap.OnEvent("Click", (*) => (
     ResultSnapEnabled := (chkSnap.Value=1),
@@ -1133,8 +1133,10 @@ OCR_RecordCurrentMatch(winSel, showHighlight := false, test := false) {
     if (gCurrentTextPath = "") and (test = false)
         StartNewRecordingTextFile("auto")  ; 念のため
 
-    if (OCRDebugSaveWin) and (test = false)
-        CaptureWithMiniCap(winSel, "", "", "client")
+    if (OCRDebugSaveWin)
+        CaptureWithPSCapture(winSel, test ? "test" : "", "", "client")
+    ; if (OCRDebugSaveWin) and (test = false)
+    ;     CaptureWithMiniCap(winSel, "", "", "client")
     ; CaptureWithNirCmd(winSel)
     ; if (OCRDebugSaveWin)
     ;     CaptureWithNirCmd_Client(winSel)
@@ -2672,6 +2674,45 @@ OCR__EnsureUniquePath(path) {
         i += 1
     }
 }
+
+;===========================================================
+; PSCapture でスクリーンショット保存（AHK v2）
+;   - ファイル名: {録画ベース}_{経過}[_{label}].png
+;   - mode="client"  : クライアント領域のみ（枠/影なし）
+;     mode="frame"   : ウィンドウ全体から影を自動トリミング（-aeroborder）
+; 依存: MsToHMS(), gCurrentTextPath, gRecStartTick
+;===========================================================
+
+; 使い分けの入口（基本はこれを呼ぶ）
+CaptureWithPSCapture(winSel, label := "", outDir := "", mode := "client") {
+    if (StrLower(mode) = "frame")
+        return CaptureWithPSCapture_FrameNoShadow(winSel, label, outDir)
+    return CaptureWithPSCapture_Client(winSel, label, outDir)
+}
+; 1) クライアント領域のみ（枠・影なし）
+CaptureWithPSCapture_Client(winSel, label := "", outDir := "") {
+    hwnd := OCR__ResolveHwnd(winSel)
+    if !hwnd
+        return false
+    path := OCR_BuildSnapPath(label, outDir)
+    rc := PSCap.captureWindowClient(hwnd, path)
+    ok   := (rc = 0 && FileExist(path))
+    try Log(ok ? "PScapture client saved: " path : "PScapture client failed rc=" rc)
+    return ok
+}
+
+; 2) 全体
+CaptureWithPSCapture_FrameNoShadow(winSel, label := "", outDir := "", border := 200, flatten := true, bg := 255) {
+    hwnd := OCR__ResolveHwnd(winSel)
+    if !hwnd
+        return false
+    path := OCR_BuildSnapPath(label, outDir)
+    rc := PSCap.capturePrimary(hwnd, path)
+    ok := (rc = 0 && FileExist(path))
+    try Log(ok ? "PScapture frame saved: " path : "PScapture frame failed rc=" rc)
+    return ok
+}
+
 ;===========================================================
 ; MiniCap でスクリーンショット保存（AHK v2）
 ;   - ファイル名: {録画ベース}_{経過}[_{label}].png
@@ -2727,7 +2768,7 @@ CaptureWithMiniCap_FrameNoShadow(winSel, label := "", outDir := "", border := 20
 
     cmd := Format('"{1}" -capturehwnd {2} -nofocus {3} -save "{4}" -exit -stderr', exe, hwnd, opts, path)
     rc  := RunWait(cmd, , "Hide")
-    ok  := (rc = 0 && FileExist(path))
+    ok  := (FileExist(path))
     try Log(ok ? "MiniCap frame saved: " path : "MiniCap frame failed rc=" rc)
     return ok
 }
