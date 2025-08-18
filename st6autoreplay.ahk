@@ -274,7 +274,7 @@ chkUseToggle.Value := UseOBSToggleForRollover ? 1 : 0
 ; -------------------- ログタブ --------------------
 tab.UseTab(3)
 grpLog := main.Add("GroupBox", "x20 y45 w680 h360", "ログ")
-logBox := main.Add("Edit", "x35 y70 w650 h330 ReadOnly -Wrap -VScroll", "")
+logBox := main.Add("Edit", "x35 y70 w650 h330 ReadOnly -Wrap +VScroll +HScroll", "")
 
 btnLogClear := main.Add("Button", "x435 y40 w100 h26", "表示クリア")
 chkAutoScroll := main.Add("CheckBox", "x545 y40 w180 h26", "最新へ自動スクロール")
