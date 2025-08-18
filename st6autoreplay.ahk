@@ -167,7 +167,7 @@ global OCRDebugSaveWin := true
 ; ============================================================
 ; GUI（タブ式 + 共通フラット・ステータス）
 ; ============================================================
-main := Gui("+Resize +MinSize740x250", "SF6 自動リプレイ")
+main := Gui("+Resize +MinSize720x250", "SF6 自動リプレイ")
 main.SetFont("s9")
 global IconPath := A_ScriptDir "\icons\rec_icon.ico"
 if FileExist(IconPath) {
@@ -485,6 +485,7 @@ StartAutomation() {
 
         ; 終了UI待ち
         startTick := A_TickCount
+        detectHardTimeout := false
         Loop {
             if !gRunning
                 break
@@ -494,12 +495,14 @@ StartAutomation() {
                 break
 
             if (A_TickCount - startTick) > (MatchHardTimeoutSec * 1000) {
-                Log("TIMEOUT: no end UI within " MatchHardTimeoutSec "s")
-                break
+                Log("TIMEOUT: no end UI within " MatchHardTimeoutSec "s -> force handling same as detected")
+                detectHardTimeout := true
+            } else {
+                detectHardTimeout := false
             }
 
             roi := (gUseFullROI ? GetROI_Full() : GetROI_End_Default(GameWinSelector))
-            if FindAnyImage(Img_Ends, roi, ToleranceEnd, &fx, &fy) {
+            if FindAnyImage(Img_Ends, roi, ToleranceEnd, &fx, &fy) or detectHardTimeout{
                 Log("DETECT: end UI at " fx "," fy)
                 Sleep Delay_BeforeNavigate
 
