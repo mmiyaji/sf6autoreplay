@@ -82,7 +82,6 @@ BlackCropMarginY       := 0.15
 AutoScrollLog := true
 
 ; ---- OCR 設定（既定値）----
-UseOCRResult       := true
 OCRLang      := "ja-JP"           ; 日本語。英語UIなら "en-US"
 OCRScale     := 3.0               ; 1.5～2.0 で精度↑（重くはなる）
 OCRGray      := true              ; グレースケール化
@@ -104,7 +103,6 @@ LeftNameX2Frac   := 0.46
 RightNameX1Frac  := 0.56
 RightNameX2Frac  := 0.90
 
-InitOCR()
 ; ===== パネル（結果ウィンドウ）全体の相対位置 =====
 Clamp01(v) => Max(0, Min(1, v+0.0))
 
@@ -148,6 +146,12 @@ AutoSaveOnExit := true
 LogEnabled := true
 LogDir := A_ScriptDir "\logs"
 
+ResultSnapEnabled := true
+ResultSnapDir := A_ScriptDir "\snapshots"
+
+SaveOCREnabled := true
+SaveOCRDir := A_ScriptDir "\results"
+
 ; ---------- 内部状態 ----------
 global gRunning := false
 global gPaused := false
@@ -164,6 +168,7 @@ global gCurrentTextPath := ""           ; 現在の録画セグメントの出�
 global gRecStartTick := 0               ; 録画開始Tick（経過時刻の基準）
 global OCRDebugSaveWin := true
 
+
 ; ============================================================
 ; GUI（タブ式 + 共通フラット・ステータス）
 ; ============================================================
@@ -176,7 +181,7 @@ if FileExist(IconPath) {
 }
 
 ; ▼タブ本体：高さを少し低くして下段の常時ボタン領域を確保
-tab := main.Add("Tab3", "x10 y10 w700 h410", ["基本設定","詳細設定","ログ","テスト"])
+tab := main.Add("Tab3", "x10 y10 w700 h410", ["基本設定","操作設定","出力設定","ログ","テスト"])
 
 ; -------------------- 基本設定タブ --------------------
 tab.UseTab(1)
@@ -211,73 +216,141 @@ chkChkOBS.Value := CheckOnStart_OBS ? 1 : 0
 chkCloseGame := main.Add("CheckBox", "x35 y330 w240", "録画停止時にゲームを終了する")
 chkCloseGame.Value := CloseGameOnStop ? 1 : 0
 
-chkUseOCR := main.Add("CheckBox", "x300 y330 w240", "リザルトをOCRで記録する")
-chkUseOCR.Value := UseOCRResult ? 1 : 0
-
 ; ▼操作（適用/読込/保存/OBS開始/停止）
 btnApply := main.Add("Button", "x295 y355 w120 h28", "適用")
 btnLoad  := main.Add("Button", "x35  y355 w120 h28", "読込（INI）")
 btnSave  := main.Add("Button", "x165 y355 w120 h28", "保存（INI）")
 btnOBSon := main.Add("Button", "x425 y355 w120 h28", "OBS録画開始")
 btnOBSoff:= main.Add("Button", "x555 y355 w120 h28", "OBS録画停止")
-; -------------------- 詳細設定タブ --------------------
+
+; -------------------- 詳細設定(操作)タブ --------------------
 tab.UseTab(2)
-grpAdv := main.Add("GroupBox", "x20 y45 w680 h360", "詳細設定")
 
-main.Add("Text", "x35 y70 w160", "次の選択方向（一覧）")
-ddlDir := main.Add("DropDownList", "x35 y88 w120", ["down","up"])
+grpOps := main.Add("GroupBox", "x20 y45 w680 h360", "詳細設定（操作）")
 
-main.Add("Text", "x180 y70 w200", "回数（マッチ数 / 0=無限）")
-edtMatches := main.Add("Edit", "x180 y88 w120")
+; ── 実行（左側）
+grpRun := main.Add("GroupBox", "x35 y70 w305 h250", "実行")
+main.Add("Text", "x50  y95  w140", "次の選択方向（一覧）")
+ddlDir := main.Add("DropDownList", "x50  y113 w120", ["down","up"])
 
-main.Add("Text", "x325 y70 w200", "タイムリミット（分 / 0=無効）")
-edtMaxMin := main.Add("Edit", "x325 y88 w120")
+main.Add("Text", "x195 y95  w140", "回数（0=無限）")
+edtMatches := main.Add("Edit", "x195 y113 w120")
 
-main.Add("Text", "x470 y70 w200", "録画ローテ（分 / 0=無効）")
-edtRollMin := main.Add("Edit", "x470 y88 w120")
+main.Add("Text", "x50  y147 w140", "タイムリミット（分）")
+edtMaxMin := main.Add("Edit", "x50  y165 w120")
 
-main.Add("Text", "x35 y120 w160", "ローテ方式")
-ddlRollMode := main.Add("DropDownList", "x35 y138 w120", ["safe","instant"])
+main.Add("Text", "x195 y147 w140", "録画ローテ（分）")
+edtRollMin := main.Add("Edit", "x195 y165 w120")
 
-main.Add("Text", "x180 y120 w200", "Tolerance（0-255）")
-edtTol := main.Add("Edit", "x180 y138 w120")
+main.Add("Text", "x50  y199 w140", "ローテ方式")
+ddlRollMode := main.Add("DropDownList", "x50  y217 w120", ["safe","instant"])
 
-chkROI := main.Add("CheckBox", "x325 y138 w220", "ROI = 全画面")
+main.Add("Text", "x195 y199 w140", "OBS切替キー（任意）")
+edtToggle := main.Add("Edit", "x195 y217 w120", Key_ToggleRec)
 
-main.Add("Text", "x470 y120 w200", "次移動の回数 / 間隔(ms)")
-edtNextRep := main.Add("Edit", "x470 y138 w50")
-main.Add("Text", "x525 y141 w20 Center", "×")
-edtNextInt := main.Add("Edit", "x548 y138 w70")
-
-main.Add("Text", "x35 y180 w200", "開始→決定2回の間隔(ms)")
-edtD1 := main.Add("Edit", "x35 y198 w120", Delay_AfterFirstConfirm)
-main.Add("Text", "x180 y180 w200", "決定後の小休止(ms)")
-edtD2 := main.Add("Edit", "x180 y198 w120", Delay_AfterPlayKey)
-main.Add("Text", "x325 y180 w200", "終了検出後の待機(ms)")
-edtD3 := main.Add("Edit", "x325 y198 w120", Delay_BeforeNavigate)
-main.Add("Text", "x470 y180 w200", "戻り後の待機(ms)")
-edtD4 := main.Add("Edit", "x470 y198 w120", Delay_AfterBackKey)
-
-main.Add("Text", "x35 y230 w200", "次のリプレイへ(ms)")
-edtD5 := main.Add("Edit", "x35 y248 w120", Delay_BetweenItems)
-
-main.Add("Text", "x180 y230 w220", "ログ出力フォルダ")
-edtLogDir := main.Add("Edit", "x180 y248 w260", LogDir)
-chkLog := main.Add("CheckBox", "x450 y248 w200", "ログをファイルに保存")
-chkLog.Value := LogEnabled ? 1 : 0
-
-main.Add("Text", "x180 y280 w200", "OBS切替キー（任意）")
-edtToggle := main.Add("Edit", "x180 y298 w120", Key_ToggleRec)
-chkUseToggle := main.Add("CheckBox", "x325 y298 w220", "ローテは切替キーで行う")
+chkUseToggle := main.Add("CheckBox", "x50  y250 w265", "ローテは切替キーで行う(OBS詳細設定)")
+main.Add("Text", "x70  y270 w265", "オフの場合は録画停止→再開操作")
 chkUseToggle.Value := UseOBSToggleForRollover ? 1 : 0
+chkUseToggle.OnEvent("Click", (*) => (UseOBSToggleForRollover := (chkUseToggle.Value=1)))
+
+; ── 検出 / 遷移（右側）
+grpDetect := main.Add("GroupBox", "x355 y70 w330 h250", "検出 / 遷移")
+main.Add("Text", "x370 y95  w140", "Tolerance（0-255）")
+edtTol := main.Add("Edit", "x370 y113 w120")
+
+chkROI := main.Add("CheckBox", "x535 y113 w125", "ROI = 全画面")
+
+main.Add("Text", "x370 y147 w160", "次移動の回数 / 間隔(ms)")
+edtNextRep := main.Add("Edit", "x370 y165 w50")
+main.Add("Text", "x425 y168 w20 Center", "×")
+edtNextInt := main.Add("Edit", "x450 y165 w70")
+
+main.Add("Text", "x535 y147 w140", "開始→決定2回間隔")
+edtD1 := main.Add("Edit", "x535 y165 w140", Delay_AfterFirstConfirm)
+
+main.Add("Text", "x370 y199 w140", "決定後の小休止(ms)")
+edtD2 := main.Add("Edit", "x370 y217 w140", Delay_AfterPlayKey)
+
+main.Add("Text", "x535 y199 w140", "終了検出後の待機(ms)")
+edtD3 := main.Add("Edit", "x535 y217 w140", Delay_BeforeNavigate)
+
+main.Add("Text", "x370 y243 w140", "戻り後の待機(ms)")
+edtD4 := main.Add("Edit", "x370 y261 w140", Delay_AfterBackKey)
+
+main.Add("Text", "x535 y243 w140", "次のリプレイへ(ms)")
+edtD5 := main.Add("Edit", "x535 y261 w140", Delay_BetweenItems)
+
+; -------------------- 詳細設定(出力)タブ --------------------
+tab.UseTab(3)
+
+grpOut  := main.Add("GroupBox", "x20 y45 w680 h360", "詳細設定（出力）")
+grpSave := main.Add("GroupBox", "x35 y70 w650 h260", "保存設定")
+
+; ===== レイアウト基準 =====
+; 左カラム: x=50 / 右カラム: x=400
+; 入力幅は両カラムとも Edit=220, Button=60（隙間10）
+; チェックボックスは Edit の下段に左右で揃える
+; OCR は下段左から、チェックは右カラム位置で揃える
+
+; 1) ログ（左カラム）
+main.Add("Text",  "x50  y95  w130", "ログ出力フォルダ")
+edtLogDir := main.Add("Edit",   "x50  y115 w220", LogDir)
+btnLogDir := main.Add("Button", "x280 y115 w60",  "参照…")
+btnLogDir.OnEvent("Click", (*) => (
+    dir := DirSelect(LogDir, 1, "ログ出力フォルダの選択"),
+    dir ? (edtLogDir.Value := dir, LogDir := dir) : ""
+))
+chkLog := main.Add("CheckBox", "x50  y150 w270", "ログをファイルに保存")
+chkLog.Value := LogEnabled ? 1 : 0
+chkLog.OnEvent("Click", (*) => (
+    LogEnabled := (chkLog.Value=1),
+    edtLogDir.Enabled := LogEnabled,
+    btnLogDir.Enabled := LogEnabled
+))
+edtLogDir.Enabled := LogEnabled, btnLogDir.Enabled := LogEnabled
+
+; 2) キャプチャ（右カラム）
+main.Add("Text",  "x380 y95  w130", "キャプチャ保存先")
+edtSnapDir := main.Add("Edit",   "x380 y115 w220", ResultSnapDir)
+btnSnapDir := main.Add("Button", "x610 y115 w60",  "参照…")
+btnSnapDir.OnEvent("Click", (*) => (
+    dir := DirSelect(ResultSnapDir, 1, "キャプチャ保存先の選択"),
+    dir ? (edtSnapDir.Value := dir, ResultSnapDir := dir) : ""
+))
+chkSnap := main.Add("CheckBox", "x380 y150 w270", "マッチリザルト画面をキャプチャ保存")
+main.Add("Text", "x380 y170 w300", "MiniCap.exeをダウンロードしtools/配下に配置してください")
+chkSnap.Value := ResultSnapEnabled ? 1 : 0
+chkSnap.OnEvent("Click", (*) => (
+    ResultSnapEnabled := (chkSnap.Value=1),
+    edtSnapDir.Enabled := ResultSnapEnabled,
+    btnSnapDir.Enabled := ResultSnapEnabled
+))
+edtSnapDir.Enabled := ResultSnapEnabled, btnSnapDir.Enabled := ResultSnapEnabled
+
+; 3) リザルト（OCR）— 下段（左=パス、右=ON/OFF）
+main.Add("Text",  "x50  y190 w130", "OCR保存先")
+edtOCRDir := main.Add("Edit",   "x50  y210 w220", SaveOCRDir)
+btnOCRDir := main.Add("Button", "x280 y210 w60",  "参照…")
+btnOCRDir.OnEvent("Click", (*) => (
+    dir := DirSelect(SaveOCRDir, 1, "OCR結果の保存先の選択"),
+    dir ? (edtOCRDir.Value := dir, SaveOCRDir := dir) : ""
+))
+chkOCR := main.Add("CheckBox", "x50 y245 w270", "OCRのマッチリザルトを保存")
+chkOCR.Value := SaveOCREnabled ? 1 : 0
+chkOCR.OnEvent("Click", (*) => (
+    SaveOCREnabled := (chkOCR.Value=1),
+    edtOCRDir.Enabled := SaveOCREnabled,
+    btnOCRDir.Enabled := SaveOCREnabled
+))
+edtOCRDir.Enabled := SaveOCREnabled, btnOCRDir.Enabled := SaveOCREnabled
 
 ; -------------------- ログタブ --------------------
-tab.UseTab(3)
+tab.UseTab(4)
 grpLog := main.Add("GroupBox", "x20 y45 w680 h360", "ログ")
 logBox := main.Add("Edit", "x35 y70 w650 h330 ReadOnly -Wrap +VScroll +HScroll", "")
 
-btnLogClear := main.Add("Button", "x435 y40 w100 h26", "表示クリア")
-chkAutoScroll := main.Add("CheckBox", "x545 y40 w180 h26", "最新へ自動スクロール")
+btnLogClear := main.Add("Button", "x425 y40 w100 h26", "表示クリア")
+chkAutoScroll := main.Add("CheckBox", "x545 y40 w140 h26", "最新へ自動スクロール")
 chkAutoScroll.Value := AutoScrollLog ? 1 : 0
 
 btnLogClear.OnEvent("Click", (*) => (
@@ -286,15 +359,42 @@ btnLogClear.OnEvent("Click", (*) => (
 ))
 
 ; -------------------- テストタブ --------------------
-tab.UseTab(4)
+tab.UseTab(5)
 grpTest := main.Add("GroupBox", "x20 y45 w680 h360", "テスト")
 btnDetect := main.Add("Button", "x35 y80 w150 h30", "マッチ終了検出テスト")
 btnTestBlack := main.Add("Button", "x35 y120 w150 h30", "黒画面待機テスト")
-btnOCRTest := main.Add("Button", "x35 y160 w220 h30", "OCRで結果を記録（テスト）")
-btnTestName := main.Add("Button", "x35 y200 w150 h30", "名前OCRテスト")
+btnOCRTest := main.Add("Button", "x35 y160 w150 h30", "リザルトOCRテスト")
+btnTestName := main.Add("Button", "x35 y200 w150 h30", "リザルトOCRテスト(詳細)")
 
 ; -------------------- タブ終了 --------------------
 tab.UseTab()
+
+main.OnEvent("Size", OnMainResize)
+OnMainResize(gui, minMax, w, h) {
+    margin := 10
+    bottomBarH := 70
+
+    ; タブ全体を拡張
+    tab.Move(margin, margin, w - margin*2, h - bottomBarH - margin*2)
+
+    ; ログタブの領域（存在すれば動かす）
+    try {
+        grpLog.Move(20, 45, w - 40, h - bottomBarH - 55)
+        logBox.Move(35, 70, w - 70, h - bottomBarH - 95)
+        btnLogClear.Move(w - 280, 40)
+        chkAutoScroll.Move(w - 170, 40)
+    }
+
+    ; 下段のボタン群
+    btnY := h - bottomBarH + 5
+    gap := 10, bw := 120, bh := 28
+    btnStart.Move( 15,                btnY, bw, bh)
+    btnSafe.Move(  15 + (bw+gap),     btnY, bw, bh)
+    btnForce.Move( 15 + 2*(bw+gap),   btnY, bw, bh)
+    btnPause.Move( 15 + 3*(bw+gap),   btnY, bw, bh)
+
+    statusText.Move(15, btnY + 35, w - 30, 24)
+}
 
 ; ▼タブ外（常時表示）操作ボタン：どのタブでも使える
 ; 位置はリサイズイベントで追随させるので、初期値は仮でOK
@@ -313,6 +413,7 @@ if FileExist(ConfigPath) {
     LoadConfig(ConfigPath)
 }
 UpdateGuiFromVars()
+InitOCR()
 main.Show("NA")
 
 ; ---- ステータス更新タイマー ----
@@ -334,7 +435,7 @@ btnDetect.OnEvent("Click",(*) => (QuickDetectTest(), RefocusGame()))
 btnOBSon.OnEvent("Click", (*) => (FocusedTriggerOBS(Key_StartRec), RefocusGame()))
 btnOBSoff.OnEvent("Click",(*) => (FocusedTriggerOBS(Key_StopRec),  RefocusGame()))
 btnTestBlack.OnEvent("Click", (*) => (RefocusGame(), TestBlackWait()))
-btnOCRTest.OnEvent("Click", (*) => OCR_TestButton())
+btnOCRTest.OnEvent("Click", (*) => (RefocusGame(), OCR_TestButton()))
 btnTestName.OnEvent("Click", (*) => (RefocusGame(), OCR_TestResultButton(GameWinSelector)))
 
 ; ============================================================
@@ -469,7 +570,7 @@ StartAutomation() {
         Press(Key_Confirm, 80)
         Sleep Delay_AfterFirstConfirm
         EnsureFocusGame()
-        if UseOCRResult {
+        if SaveOCREnabled {
             try {
                 Sleep 150  ; わずかに安定待ち
                 OCR_RecordCurrentMatch(GameWinSelector)
@@ -730,12 +831,12 @@ WaitWhileBlack(roi, darkness := 32, grid := 8, brightAllowance := 5
 ;   引数/返り値: 定義参照
 InitOCR() {
     ; シングルトン初期化: OCRが有効化されている時だけ初期化し、二重実行を避ける
-    global UseOCRResult, OCRLang
+    global SaveOCREnabled, OCRLang
     static _ready := false
     static _sig := ""  ; 設定のシグネチャ（例: 言語）
 
     ; OCRがOFFなら何もしない
-    if !UseOCRResult
+    if !SaveOCREnabled
         return false
 
     ; 現在の設定からシグネチャを生成（必要に応じて項目を追加）
@@ -772,7 +873,8 @@ ApplyGuiToVars() {
     global GameWinSelector, AutoRefocusGame, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
     global LogEnabled, LogDir, AutoScrollLog
-    global UseOCRResult
+    global ResultSnapEnabled, ResultSnapDir
+    global SaveOCREnabled, SaveOCRDir
     NextDirection := ddlDir.Text
     TotalMatches := ToIntSafe(edtMatches.Text, TotalMatches)
     MaxRunMinutes := ToIntSafe(edtMaxMin.Text, MaxRunMinutes)
@@ -810,7 +912,10 @@ ApplyGuiToVars() {
     LogEnabled := !!chkLog.Value
     LogDir := edtLogDir.Text
     AutoScrollLog := !!chkAutoScroll.Value
-    UseOCRResult := !!chkUseOCR.Value
+    ResultSnapEnabled := !!chkSnap.Value
+    ResultSnapDir := edtSnapDir.Text
+    SaveOCREnabled := !!chkOCR.Value
+    SaveOCRDir := edtOCRDir.Text
 }
 ;-- 関数: BuildStatusBase()
 ;   目的: UIを組み立てる。
@@ -906,8 +1011,11 @@ UpdateGuiFromVars() {
     chkCloseGame.Value := CloseGameOnStop ? 1 : 0
     chkLog.Value := LogEnabled ? 1 : 0
     edtLogDir.Text := LogDir
+    chkSnap.Value := ResultSnapEnabled ? 1 : 0
+    edtSnapDir.Text := ResultSnapDir
+    chkOCR.Value := SaveOCREnabled ? 1 : 0
+    edtOCRDir.Text := SaveOCRDir
     chkAutoScroll.Value := AutoScrollLog ? 1 : 0
-    chkUseOCR.Value := UseOCRResult ? 1 : 0
     UpdatePauseBtn()
 }
 
@@ -1016,16 +1124,16 @@ StartNewRecordingTextFile(reason := "start") {
 ;-- 関数: OCR_RecordCurrentMatch(winSel, showHighlight := false)
 ;   目的: OCRに関する処理を行う。
 ;   引数/返り値: 定義参照
-OCR_RecordCurrentMatch(winSel, showHighlight := false) {
+OCR_RecordCurrentMatch(winSel, showHighlight := false, test := false) {
     global OCRLang, OCRScale, OCRGray
     global ROI_ReplayID, ROI_Time, ROI_L_Name, ROI_R_Name
     global ROI_L_Rating, ROI_R_Rating, ROI_L_Result, ROI_R_Result
 
     global gCurrentTextPath, gRecStartTick
-    if (gCurrentTextPath = "")
+    if (gCurrentTextPath = "") and (test = false)
         StartNewRecordingTextFile("auto")  ; 念のため
 
-    if (OCRDebugSaveWin)
+    if (OCRDebugSaveWin) and (test = false)
         CaptureWithMiniCap(winSel, "", "", "client")
     ; CaptureWithNirCmd(winSel)
     ; if (OCRDebugSaveWin)
@@ -1085,12 +1193,14 @@ OCR_RecordCurrentMatch(winSel, showHighlight := false) {
 
     ; 4) 書き出し（左右の抽出順は維持、勝敗タグだけ反映）
     ;    ※ AppendMatchLine は既存のものをそのまま使用
-    AppendMatchLine(
-        OCR_ExtractReplayID(idTxt)                 ; replayID
-      , lName,  lRate.value,  (lRate.kind!=""?lRate.kind:"MR")
-      , rName,  rRate.value,  (rRate.kind!=""?rRate.kind:"MR")
-      , winnerSide
-    )
+    if (test = false) {
+        AppendMatchLine(
+            OCR_ExtractReplayID(idTxt)                 ; replayID
+        , lName,  lRate.value,  (lRate.kind!=""?lRate.kind:"MR")
+        , rName,  rRate.value,  (rRate.kind!=""?rRate.kind:"MR")
+        , winnerSide
+        )
+    }
 
     ; 5) 呼び出し側でも使えるよう返却
     return {
@@ -1706,7 +1816,8 @@ LoadConfig(path) {
     global Img_Ends, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
     global LogEnabled, LogDir, AutoScrollLog
-    global UseOCRResult
+    global ResultSnapEnabled, ResultSnapDir
+    global SaveOCREnabled, SaveOCRDir
     NextDirection  := IniRead(path, "main", "NextDirection", NextDirection)
     TotalMatches   := Integer(IniRead(path, "main", "TotalMatches", TotalMatches))
     MaxRunMinutes  := Integer(IniRead(path, "main", "MaxRunMinutes", MaxRunMinutes))
@@ -1734,8 +1845,11 @@ LoadConfig(path) {
     }
     LogEnabled := (Integer(IniRead(path, "log", "Enabled", LogEnabled?1:0))=1)
     LogDir     := IniRead(path, "log", "Dir", LogDir)
+    ResultSnapEnabled := (Integer(IniRead(path, "log", "ResultSnapEnabled", ResultSnapEnabled?1:0))=1)
+    ResultSnapDir := IniRead(path, "log", "ResultSnapDir", ResultSnapDir)
+    SaveOCREnabled := (Integer(IniRead(path, "ocr", "SaveOCREnabled", SaveOCREnabled?1:0))=1)
+    SaveOCRDir := IniRead(path, "ocr", "SaveOCRDir", SaveOCRDir)
     AutoScrollLog := (Integer(IniRead(path, "log", "AutoScroll", AutoScrollLog?1:0))=1)
-    UseOCRResult := (Integer(IniRead(path, "ocr", "UseResultOCR", UseOCRResult?1:0))=1)
 }
 
 ;-- 関数: SaveConfig(path)
@@ -1748,7 +1862,8 @@ SaveConfig(path) {
     global Img_Ends, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
     global LogEnabled, LogDir, AutoScrollLog
-    global UseOCRResult
+    global ResultSnapEnabled, ResultSnapDir
+    global SaveOCREnabled, SaveOCRDir
     IniWrite(NextDirection,  path, "main", "NextDirection")
     IniWrite(TotalMatches,   path, "main", "TotalMatches")
     IniWrite(MaxRunMinutes,  path, "main", "MaxRunMinutes")
@@ -1773,8 +1888,11 @@ SaveConfig(path) {
     IniWrite(JoinList(Img_Ends, ";"),   path, "images", "EndImages")
     IniWrite(LogEnabled?1:0, path, "log", "Enabled")
     IniWrite(LogDir,         path, "log", "Dir")
+    IniWrite(ResultSnapEnabled?1:0, path, "log", "ResultSnapEnabled")
+    IniWrite(ResultSnapDir, path, "log", "ResultSnapDir")
+    IniWrite(SaveOCREnabled?1:0, path, "ocr", "SaveOCREnabled")
+    IniWrite(SaveOCRDir, path, "ocr", "SaveOCRDir")
     IniWrite(AutoScrollLog?1:0, path, "log", "AutoScroll")
-    IniWrite(UseOCRResult?1:0, path, "ocr", "UseResultOCR")
 }
 
 
@@ -1946,16 +2064,15 @@ TestBlackWait(*) {
 ;   目的: OCRに関する処理を行う。
 ;   引数/返り値: 定義参照
 OCR_TestButton() {
-    global UseOCRResult, GameWinSelector
-    if !UseOCRResult {
-        TrayTip "OCR", "UseOCRResult=false（基本設定でONにしてください）", 1500
-        Log("OCR TEST: skipped (UseOCRResult=false)")
+    global SaveOCREnabled, GameWinSelector
+    if !SaveOCREnabled {
+        TrayTip "OCR", "SaveOCREnabled=false（基本設定でONにしてください）", 1500
+        Log("OCR TEST: skipped (SaveOCREnabled=false)")
         return
     }
-    RefocusGame()  ; ゲームにフォーカス（警告が出るのが嫌なら EnsureFocusGame(true) 等のサイレント版を）
-    ok := OCR_RecordCurrentMatch(GameWinSelector)
+    ok := OCR_RecordCurrentMatch(GameWinSelector, showHighlight := false, test := false)
     if ok {
-        TrayTip "OCR", "結果をテキストに追記しました", 1200
+        TrayTip "OCR", "記録成功", 1200
         Log("OCR TEST: recorded to text")
     } else {
         TrayTip "OCR", "記録失敗（ウィンドウ/結果UI未検出）", 1500
@@ -1966,7 +2083,7 @@ OCR_TestButton() {
 ;   目的: OCRを読み取る。
 ;   引数/返り値: 定義参照
 OCR_TestResultButton(winSel, showHighlight := false) {
-    ocr := OCR_RecordCurrentMatch(winSel, showHighlight)
+    ocr := OCR_RecordCurrentMatch(winSel, showHighlight, test := true)
     title := "OCR: result"
     if (ocr) {
         Log("OCR: read result fields")
