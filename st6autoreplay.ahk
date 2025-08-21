@@ -2707,7 +2707,7 @@ CaptureWithPSCapture_FrameNoShadow(winSel, label := "", outDir := "", border := 
     if !hwnd
         return false
     path := OCR_BuildSnapPath(label, outDir)
-    rc := PSCap.capturePrimary(hwnd, path)
+    rc := PSCap.capturePrimary(hwnd)
     ok := (rc = 0 && FileExist(path))
     try Log(ok ? "PScapture frame saved: " path : "PScapture frame failed rc=" rc)
     return ok
