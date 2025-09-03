@@ -6,6 +6,13 @@
 ; + 画像パス改行/相対対応 + GAME操作前のフォーカス保証
 ; AutoHotkey v2
 ; ============================================================
+;@Ahk2Exe-SetName       SF6 Auto Replay
+;@Ahk2Exe-SetDescription SF6 Auto Replay Recorder
+;@Ahk2Exe-SetVersion    1.0.0.0
+;@Ahk2Exe-SetCompanyName mmiyaji
+;@Ahk2Exe-SetCopyright  (c) 2025 mmiyaji
+;@Ahk2Exe-SetMainIcon   icons\rec_icon.ico
+;@Ahk2Exe-SetFileVersion 1.0.0.0
 
 #SingleInstance Force
 #Requires AutoHotkey v2.0

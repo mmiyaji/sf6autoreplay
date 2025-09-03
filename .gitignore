@@ -60,3 +60,4 @@ old_*
 /tools
 /snapshots
 /snapshot
+dist/
