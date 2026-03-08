@@ -499,8 +499,11 @@ btnSafe  := main.Add("Button", "x145 y430 w120 h28", "安全停止")
 btnForce := main.Add("Button", "x275 y430 w120 h28", "即時停止")
 btnPause := main.Add("Button", "x405 y430 w120 h28", "一時停止")
 
+; ▼進捗バー（タブ外）
+progressBar := main.Add("Progress", "x15 y460 w700 h10 Range0-100", 0)
+
 ; ▼共通ステータス（タブ外）
-statusText := main.Add("Text", "x15 y465 w700 h24 vStatusText", "")
+statusText := main.Add("Text", "x15 y473 w700 h24 vStatusText", "")
 statusText.SetFont("s9", "Segoe UI")
 SetStatus("準備完了")
 
@@ -1207,9 +1210,19 @@ UpdateGuiFromVars() {
 ;   目的: ステータスを更新する。
 ;   引数/返り値: 定義参照
 UpdateStatusText() {
+    global gLoopCount, TotalMatches, gRunning, progressBar
     ; いまの状態 + 最新ログ を合成して出す
     SetStatus(CurrentStatusText())
     UpdatePauseBtn()  ; ラベル差分更新（既存の関数）
+    ; 進捗バー更新
+    if IsSet(progressBar) && progressBar {
+        if gRunning && TotalMatches > 0 {
+            pct := Min(100, Round(gLoopCount / TotalMatches * 100))
+            progressBar.Value := pct
+        } else if !gRunning {
+            progressBar.Value := 0
+        }
+    }
 }
 
 
