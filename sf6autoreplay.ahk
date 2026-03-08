@@ -475,7 +475,7 @@ main.OnEvent("Close", (*) => ExitApp())
 main.OnEvent("Size", OnMainResize)
 OnMainResize(gui, minMax, w, h) {
     margin := 10
-    bottomBarH := 70
+    bottomBarH := 85
 
     ; タブ全体を拡張
     tab.Move(margin, margin, w - margin*2, h - bottomBarH - margin*2)
@@ -496,7 +496,8 @@ OnMainResize(gui, minMax, w, h) {
     btnForce.Move( 15 + 2*(bw+gap),   btnY, bw, bh)
     btnPause.Move( 15 + 3*(bw+gap),   btnY, bw, bh)
 
-    statusText.Move(15, btnY + 35, w - 30, 24)
+    progressBar.Move(15, btnY + 35, w - 30, 10)
+    statusText.Move(15, btnY + 48, w - 30, 24)
 }
 
 ; ▼タブ外（常時表示）操作ボタン：どのタブでも使える
@@ -507,10 +508,10 @@ btnForce := main.Add("Button", "x275 y430 w120 h28", "即時停止")
 btnPause := main.Add("Button", "x405 y430 w120 h28", "一時停止")
 
 ; ▼進捗バー（タブ外）
-progressBar := main.Add("Progress", "x15 y460 w700 h10 Range0-100", 0)
+progressBar := main.Add("Progress", "x15 y465 w700 h10 Range0-100", 0)
 
 ; ▼共通ステータス（タブ外）
-statusText := main.Add("Text", "x15 y473 w700 h24 vStatusText", "")
+statusText := main.Add("Text", "x15 y478 w700 h24 vStatusText", "")
 statusText.SetFont("s9", "Segoe UI")
 SetStatus("準備完了")
 
