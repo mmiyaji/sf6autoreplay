@@ -1881,7 +1881,7 @@ IsRegionMostlyBlack(roi, darkness := 32, grid := 8, brightAllowance := 5) {
 WaitImageDisappear(imgList, roi, tol, timeoutMs) {
     endTick := A_TickCount + timeoutMs
     while A_TickCount < endTick {
-        if !FindAnyImage(Img_Ends, roi, tol, &x, &y)
+        if !FindAnyImage(imgList, roi, tol, &x, &y)
             return true
         Sleep 80
     }
