@@ -1851,6 +1851,7 @@ IsRegionMostlyBlack(roi, darkness := 32, grid := 8, brightAllowance := 5) {
     bright := 0
     dx := Max(1, Floor((roi.x2 - roi.x1) / Max(1, grid - 1)))
     dy := Max(1, Floor((roi.y2 - roi.y1) / Max(1, grid - 1)))
+    CoordMode("Pixel", "Client")  ; クライアント領域基準にする（推奨）
 
     Loop grid {
         i := A_Index - 1
@@ -1858,9 +1859,7 @@ IsRegionMostlyBlack(roi, darkness := 32, grid := 8, brightAllowance := 5) {
         Loop grid {
             j := A_Index - 1
             y := roi.y1 + j*dy
-            CoordMode("Pixel", "Client")  ; クライアント領域基準にする（推奨）
             col := PixelGetColor(x, y, "RGB")
-            Log("Color at " x "," y " = " col)
             ; col は 0xRRGGBB
             r := (col >> 16) & 0xFF
             g := (col >> 8)  & 0xFF
