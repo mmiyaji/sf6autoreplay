@@ -1996,10 +1996,12 @@ LoadConfig(path) {
     SlackEnabled   := (Integer(IniRead(path, "slack", "Enabled", SlackEnabled?1:0))=1)
     SlackRouterUrl := IniRead(path, "slack", "RouterUrl", SlackRouterUrl)
     SlackTimeoutMs := Integer(IniRead(path, "slack", "TimeoutMs", SlackTimeoutMs))
-    chkSlackEnabled.Value := SlackEnabled
-    edtSlackRouter.Value := SlackRouterUrl
-    edtSlackTimeout.Value := SlackTimeoutMs
-    UpdateSlackUIState()
+    if IsSet(chkSlackEnabled) && chkSlackEnabled {
+        chkSlackEnabled.Value := SlackEnabled
+        edtSlackRouter.Value := SlackRouterUrl
+        edtSlackTimeout.Value := SlackTimeoutMs
+        UpdateSlackUIState()
+    }
 }
 
 ;-- 関数: SaveConfig(path)
