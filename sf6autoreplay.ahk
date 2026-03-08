@@ -111,6 +111,9 @@ LeftNameX2Frac   := 0.46
 RightNameX1Frac  := 0.56
 RightNameX2Frac  := 0.90
 
+; ---- Pause timeout ----
+PauseTimeoutMin  := 10   ; 0 = 無効
+
 ; ---- Disk check ----
 DiskCheckEnabled := true
 DiskMinFreeGB    := 10
@@ -181,6 +184,7 @@ global gRolloverRequested := false
 global gLastRolloverTick := 0
 global gLoopCount := 0
 global gHardTimeoutCount := 0
+global gPausedTick := 0
 global gStatusLast := ""
 global gLastLogText := ""
 global gCurrentTextPath := ""           ; 現在の録画セグメントの出力ファイル
@@ -234,6 +238,9 @@ chkChkOBS.Value := CheckOnStart_OBS ? 1 : 0
 
 chkCloseGame := main.Add("CheckBox", "x35 y330 w240", "録画停止時にゲームを終了する")
 chkCloseGame.Value := CloseGameOnStop ? 1 : 0
+
+main.Add("Text", "x300 y333", "一時停止タイムアウト（分, 0=無効）")
+edtPauseTimeout := main.Add("Edit", "x510 y330 w60 Number", PauseTimeoutMin)
 
 ; ▼操作（適用/読込/保存/OBS開始/停止）
 btnApply := main.Add("Button", "x295 y355 w120 h28", "適用")
@@ -680,8 +687,17 @@ StartAutomation() {
         gLoopCount += 1
         Log("REPLAY: start #" gLoopCount)
 
-        while gPaused && gRunning
+        while gPaused && gRunning {
             Sleep 150
+            if PauseTimeoutMin > 0 && gPausedTick > 0 {
+                if (A_TickCount - gPausedTick) > (PauseTimeoutMin * 60000) {
+                    Log("PAUSE-TIMEOUT: " PauseTimeoutMin "分経過 → 安全停止")
+                    SlackNotify("⏸ 一時停止タイムアウト（" PauseTimeoutMin "分）→ 安全停止", "warning")
+                    gPaused := false
+                    gSafeStopRequested := true
+                }
+            }
+        }
         if !gRunning
             break
 
@@ -2022,6 +2038,7 @@ LoadConfig(path) {
     global SaveOCREnabled, SaveOCRDir
     global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
     global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
+    global PauseTimeoutMin
 
     NextDirection  := IniRead(path, "main", "NextDirection", NextDirection)
     TotalMatches   := Integer(IniRead(path, "main", "TotalMatches", TotalMatches))
@@ -2058,6 +2075,7 @@ LoadConfig(path) {
     SlackEnabled   := (Integer(IniRead(path, "slack", "Enabled", SlackEnabled?1:0))=1)
     SlackRouterUrl := IniRead(path, "slack", "RouterUrl", SlackRouterUrl)
     SlackTimeoutMs := Integer(IniRead(path, "slack", "TimeoutMs", SlackTimeoutMs))
+    PauseTimeoutMin  := Integer(IniRead(path, "main", "PauseTimeoutMin", PauseTimeoutMin))
     DiskCheckEnabled := (Integer(IniRead(path, "disk", "CheckEnabled", DiskCheckEnabled?1:0))=1)
     DiskMinFreeGB    := Integer(IniRead(path, "disk", "MinFreeGB", DiskMinFreeGB))
     DiskCheckPath    := IniRead(path, "disk", "CheckPath", DiskCheckPath)
@@ -2088,7 +2106,9 @@ SaveConfig(path) {
     global SaveOCREnabled, SaveOCRDir
     global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
     global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
+    global PauseTimeoutMin
 
+    PauseTimeoutMin  := Integer(edtPauseTimeout.Value)
     DiskCheckEnabled := chkDiskCheckEnabled.Value
     DiskMinFreeGB    := Integer(edtDiskMinFreeGB.Value)
     DiskCheckPath    := Trim(edtDiskCheckPath.Value)
@@ -2128,6 +2148,7 @@ SaveConfig(path) {
     IniWrite(SlackEnabled?1:0, path, "slack", "Enabled")
     IniWrite(SlackRouterUrl,   path, "slack", "RouterUrl")
     IniWrite(SlackTimeoutMs,   path, "slack", "TimeoutMs")
+    IniWrite(PauseTimeoutMin,      path, "main", "PauseTimeoutMin")
     IniWrite(DiskCheckEnabled?1:0, path, "disk", "CheckEnabled")
     IniWrite(DiskMinFreeGB,        path, "disk", "MinFreeGB")
     IniWrite(DiskCheckPath,        path, "disk", "CheckPath")
@@ -2725,8 +2746,9 @@ ToggleFullROI() {
 ;   目的: 切り替の処理を切り替える。
 ;   引数/返り値: 定義参照
 TogglePause() {
-    global gPaused
+    global gPaused, gPausedTick
     gPaused := !gPaused
+    gPausedTick := gPaused ? A_TickCount : 0
     TrayTip (gPaused ? "一時停止" : "再開"), "", 900
     Log(gPaused ? "PAUSE" : "RESUME")
 }
