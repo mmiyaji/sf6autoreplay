@@ -584,13 +584,17 @@ StartAutomation() {
     }
     ; 起動チェック
     if CheckOnStart_Game && !WinExist(GameWinSelector) {
-        MsgBox "ゲームのウィンドウが見つかりません:`n" GameWinSelector, "起動チェック", 48
+        msg := "ゲームのウィンドウが見つかりません:`n" GameWinSelector
+        MsgBox msg, "起動チェック", 48
         Log("WARN: Game window not found: " GameWinSelector)
+        SlackNotify("⚠️ 起動チェック失敗: ゲームウィンドウが見つかりません`n" GameWinSelector, "warning")
         return
     }
     if UseOBSRecording && CheckOnStart_OBS && !WinExist(OBSWinSelector) {
-        MsgBox "OBSのウィンドウが見つかりません:`n" OBSWinSelector, "起動チェック", 48
+        msg := "OBSのウィンドウが見つかりません:`n" OBSWinSelector
+        MsgBox msg, "起動チェック", 48
         Log("WARN: OBS window not found: " OBSWinSelector)
+        SlackNotify("⚠️ 起動チェック失敗: OBSウィンドウが見つかりません`n" OBSWinSelector, "warning")
         return
     }
 
