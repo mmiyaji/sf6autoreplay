@@ -180,6 +180,7 @@ global gRunStartTick := 0
 global gRolloverRequested := false
 global gLastRolloverTick := 0
 global gLoopCount := 0
+global gHardTimeoutCount := 0
 global gStatusLast := ""
 global gLastLogText := ""
 global gCurrentTextPath := ""           ; 現在の録画セグメントの出力ファイル
@@ -616,6 +617,7 @@ StartAutomation() {
     gRolloverRequested := false
     gRunStartTick := A_TickCount
     gLoopCount := 0
+    gHardTimeoutCount := 0
 
     CoordMode "Pixel", "Screen"
     RefocusGame(true)
@@ -708,6 +710,7 @@ StartAutomation() {
 
             if (A_TickCount - startTick) > (MatchHardTimeoutSec * 1000) {
                 Log("TIMEOUT: no end UI within " MatchHardTimeoutSec "s -> force handling same as detected")
+                gHardTimeoutCount += 1
                 detectHardTimeout := true
             } else {
                 detectHardTimeout := false
@@ -821,15 +824,21 @@ BuildSlackStartMessage() {
 BuildSlackEndMessage(stopReason) {
     global gLoopCount, TotalMatches, gRunStartTick, gSafeStopRequested
     global UseOBSRecording, gRecording, RolloverMinutes, RolloverMode
+    global gHardTimeoutCount
 
     total := (TotalMatches > 0) ? TotalMatches : "∞"
-    elapsed := FormatDuration(A_TickCount - gRunStartTick)
+    elapsedMs := A_TickCount - gRunStartTick
+    elapsed := FormatDuration(elapsedMs)
+    avgSec := (gLoopCount > 0) ? Round(elapsedMs / gLoopCount / 1000, 1) : 0
 
     msg := ( "🛑 sf6autoreplay END`n"
     . "reason=" stopReason "`n"
-    . "done=" gLoopCount "/" total ", elapsed=" elapsed )
+    . "done=" gLoopCount "/" total ", elapsed=" elapsed "`n"
+    . "avg=" avgSec "s/match" )
 
-    ; 状態も少しだけ載せる（デバッグに効く）
+    if gHardTimeoutCount > 0
+        msg .= ", timeout=" gHardTimeoutCount "回"
+
     msg .= "`nobs=" (UseOBSRecording ? "on" : "off") ", rec=" (gRecording ? "on" : "off")
     if (UseOBSRecording && RolloverMinutes > 0)
         msg .= ", rollover=" RolloverMinutes "min/" RolloverMode
