@@ -111,6 +111,14 @@ LeftNameX2Frac   := 0.46
 RightNameX1Frac  := 0.56
 RightNameX2Frac  := 0.90
 
+; ---- Pause timeout ----
+PauseTimeoutMin  := 10   ; 0 = 無効
+
+; ---- Disk check ----
+DiskCheckEnabled := true
+DiskMinFreeGB    := 10
+DiskCheckPath    := "C:\"
+
 ; ---- Slack ----
 SlackEnabled   := false
 SlackRouterUrl := ""
@@ -175,6 +183,8 @@ global gRunStartTick := 0
 global gRolloverRequested := false
 global gLastRolloverTick := 0
 global gLoopCount := 0
+global gHardTimeoutCount := 0
+global gPausedTick := 0
 global gStatusLast := ""
 global gLastLogText := ""
 global gCurrentTextPath := ""           ; 現在の録画セグメントの出力ファイル
@@ -194,7 +204,7 @@ if FileExist(IconPath) {
 }
 
 ; ▼タブ本体：高さを少し低くして下段の常時ボタン領域を確保
-tab := main.Add("Tab3", "x10 y10 w700 h410", ["基本設定","操作設定","出力設定","ログ","テスト","Slack"])
+tab := main.Add("Tab3", "x10 y10 w700 h410", ["基本設定","操作設定","出力設定","ログ","テスト","ディスク","Slack"])
 
 ; -------------------- 基本設定タブ --------------------
 tab.UseTab(1)
@@ -228,6 +238,9 @@ chkChkOBS.Value := CheckOnStart_OBS ? 1 : 0
 
 chkCloseGame := main.Add("CheckBox", "x35 y330 w240", "録画停止時にゲームを終了する")
 chkCloseGame.Value := CloseGameOnStop ? 1 : 0
+
+main.Add("Text", "x300 y333", "一時停止タイムアウト（分, 0=無効）")
+edtPauseTimeout := main.Add("Edit", "x510 y330 w60 Number", PauseTimeoutMin)
 
 ; ▼操作（適用/読込/保存/OBS開始/停止）
 btnApply := main.Add("Button", "x295 y355 w120 h28", "適用")
@@ -378,8 +391,24 @@ btnTestBlack := main.Add("Button", "x35 y120 w150 h30", "黒画面待機テス�
 btnOCRTest := main.Add("Button", "x35 y160 w150 h30", "リザルトOCRテスト")
 btnTestName := main.Add("Button", "x35 y200 w150 h30", "リザルトOCRテスト(詳細)")
 
-; -------------------- Slackタブ --------------------
+; -------------------- ディスクチェックタブ --------------------
 tab.UseTab(6)
+grpDisk := main.Add("GroupBox", "x20 y45 w680 h200", "ディスク容量チェック")
+chkDiskCheckEnabled := main.Add("CheckBox"
+    , "x35 y80 vUI_DiskCheckEnabled"
+    , "録画開始前にディスク空き容量をチェックする（OBS録画有効時のみ）")
+chkDiskCheckEnabled.Value := DiskCheckEnabled
+main.Add("Text", "x35 y115", "最低空き容量 (GB)")
+edtDiskMinFreeGB := main.Add("Edit", "x170 y111 w80 Number vUI_DiskMinFreeGB")
+edtDiskMinFreeGB.Value := DiskMinFreeGB
+main.Add("Text", "x260 y115", "GB 未満なら警告")
+main.Add("Text", "x35 y150", "チェック対象ドライブ")
+edtDiskCheckPath := main.Add("Edit", "x170 y146 w120 vUI_DiskCheckPath")
+edtDiskCheckPath.Value := DiskCheckPath
+main.Add("Text", "x300 y150", "例: C:\ または D:\")
+
+; -------------------- Slackタブ --------------------
+tab.UseTab(7)
 grpSlack := main.Add("GroupBox", "x20 y45 w680 h360", "Slack")
 ; --- 有効/無効 ---
 chkSlackEnabled := main.Add("CheckBox"
@@ -446,7 +475,7 @@ main.OnEvent("Close", (*) => ExitApp())
 main.OnEvent("Size", OnMainResize)
 OnMainResize(gui, minMax, w, h) {
     margin := 10
-    bottomBarH := 70
+    bottomBarH := 85
 
     ; タブ全体を拡張
     tab.Move(margin, margin, w - margin*2, h - bottomBarH - margin*2)
@@ -467,7 +496,8 @@ OnMainResize(gui, minMax, w, h) {
     btnForce.Move( 15 + 2*(bw+gap),   btnY, bw, bh)
     btnPause.Move( 15 + 3*(bw+gap),   btnY, bw, bh)
 
-    statusText.Move(15, btnY + 35, w - 30, 24)
+    progressBar.Move(15, btnY + 35, w - 30, 10)
+    statusText.Move(15, btnY + 48, w - 30, 24)
 }
 
 ; ▼タブ外（常時表示）操作ボタン：どのタブでも使える
@@ -477,8 +507,11 @@ btnSafe  := main.Add("Button", "x145 y430 w120 h28", "安全停止")
 btnForce := main.Add("Button", "x275 y430 w120 h28", "即時停止")
 btnPause := main.Add("Button", "x405 y430 w120 h28", "一時停止")
 
+; ▼進捗バー（タブ外）
+progressBar := main.Add("Progress", "x15 y465 w700 h10 Range0-100", 0)
+
 ; ▼共通ステータス（タブ外）
-statusText := main.Add("Text", "x15 y465 w700 h24 vStatusText", "")
+statusText := main.Add("Text", "x15 y478 w700 h24 vStatusText", "")
 statusText.SetFont("s9", "Segoe UI")
 SetStatus("準備完了")
 
@@ -551,6 +584,7 @@ StartAutomation() {
     global MaxRunMinutes, gLoopCount
     global UseOBSRecording, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
+    global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
 
     if gRunning {
         TrayTip "実行中", "安全停止は Ctrl+Alt+X（またはGUI）", 1500
@@ -558,13 +592,17 @@ StartAutomation() {
     }
     ; 起動チェック
     if CheckOnStart_Game && !WinExist(GameWinSelector) {
-        MsgBox "ゲームのウィンドウが見つかりません:`n" GameWinSelector, "起動チェック", 48
+        msg := "ゲームのウィンドウが見つかりません:`n" GameWinSelector
+        MsgBox msg, "起動チェック", 48
         Log("WARN: Game window not found: " GameWinSelector)
+        SlackNotify("⚠️ 起動チェック失敗: ゲームウィンドウが見つかりません`n" GameWinSelector, "warning")
         return
     }
     if UseOBSRecording && CheckOnStart_OBS && !WinExist(OBSWinSelector) {
-        MsgBox "OBSのウィンドウが見つかりません:`n" OBSWinSelector, "起動チェック", 48
+        msg := "OBSのウィンドウが見つかりません:`n" OBSWinSelector
+        MsgBox msg, "起動チェック", 48
         Log("WARN: OBS window not found: " OBSWinSelector)
+        SlackNotify("⚠️ 起動チェック失敗: OBSウィンドウが見つかりません`n" OBSWinSelector, "warning")
         return
     }
 
@@ -575,12 +613,26 @@ StartAutomation() {
             return
         }
 
+    ; ディスク容量チェック
+    if DiskCheckEnabled && UseOBSRecording {
+        freeGB := DriveGetSpaceFree(DiskCheckPath) / 1024
+        if freeGB < DiskMinFreeGB {
+            msg := "ディスク空き容量が不足しています。`n空き: " Round(freeGB, 1) " GB / 最低: " DiskMinFreeGB " GB`n`n録画を開始しますか？"
+            if MsgBox(msg, "ディスク容量警告", 52) != "Yes" {
+                Log("ABORT: disk space too low (" Round(freeGB, 1) "GB free)")
+                return
+            }
+        }
+        Log("DISK: " Round(freeGB, 1) "GB free on " DiskCheckPath)
+    }
+
     gRunning := true
     gPaused := false
     gSafeStopRequested := false
     gRolloverRequested := false
     gRunStartTick := A_TickCount
     gLoopCount := 0
+    gHardTimeoutCount := 0
 
     CoordMode "Pixel", "Screen"
     RefocusGame(true)
@@ -636,8 +688,17 @@ StartAutomation() {
         gLoopCount += 1
         Log("REPLAY: start #" gLoopCount)
 
-        while gPaused && gRunning
+        while gPaused && gRunning {
             Sleep 150
+            if PauseTimeoutMin > 0 && gPausedTick > 0 {
+                if (A_TickCount - gPausedTick) > (PauseTimeoutMin * 60000) {
+                    Log("PAUSE-TIMEOUT: " PauseTimeoutMin "分経過 → 安全停止")
+                    SlackNotify("⏸ 一時停止タイムアウト（" PauseTimeoutMin "分）→ 安全停止", "warning")
+                    gPaused := false
+                    gSafeStopRequested := true
+                }
+            }
+        }
         if !gRunning
             break
 
@@ -673,6 +734,7 @@ StartAutomation() {
 
             if (A_TickCount - startTick) > (MatchHardTimeoutSec * 1000) {
                 Log("TIMEOUT: no end UI within " MatchHardTimeoutSec "s -> force handling same as detected")
+                gHardTimeoutCount += 1
                 detectHardTimeout := true
             } else {
                 detectHardTimeout := false
@@ -786,15 +848,21 @@ BuildSlackStartMessage() {
 BuildSlackEndMessage(stopReason) {
     global gLoopCount, TotalMatches, gRunStartTick, gSafeStopRequested
     global UseOBSRecording, gRecording, RolloverMinutes, RolloverMode
+    global gHardTimeoutCount
 
     total := (TotalMatches > 0) ? TotalMatches : "∞"
-    elapsed := FormatDuration(A_TickCount - gRunStartTick)
+    elapsedMs := A_TickCount - gRunStartTick
+    elapsed := FormatDuration(elapsedMs)
+    avgSec := (gLoopCount > 0) ? Round(elapsedMs / gLoopCount / 1000, 1) : 0
 
     msg := ( "🛑 sf6autoreplay END`n"
     . "reason=" stopReason "`n"
-    . "done=" gLoopCount "/" total ", elapsed=" elapsed )
+    . "done=" gLoopCount "/" total ", elapsed=" elapsed "`n"
+    . "avg=" avgSec "s/match" )
 
-    ; 状態も少しだけ載せる（デバッグに効く）
+    if gHardTimeoutCount > 0
+        msg .= ", timeout=" gHardTimeoutCount "回"
+
     msg .= "`nobs=" (UseOBSRecording ? "on" : "off") ", rec=" (gRecording ? "on" : "off")
     if (UseOBSRecording && RolloverMinutes > 0)
         msg .= ", rollover=" RolloverMinutes "min/" RolloverMode
@@ -1163,9 +1231,19 @@ UpdateGuiFromVars() {
 ;   目的: ステータスを更新する。
 ;   引数/返り値: 定義参照
 UpdateStatusText() {
+    global gLoopCount, TotalMatches, gRunning, progressBar
     ; いまの状態 + 最新ログ を合成して出す
     SetStatus(CurrentStatusText())
     UpdatePauseBtn()  ; ラベル差分更新（既存の関数）
+    ; 進捗バー更新
+    if IsSet(progressBar) && progressBar {
+        if gRunning && TotalMatches > 0 {
+            pct := Min(100, Round(gLoopCount / TotalMatches * 100))
+            progressBar.Value := pct
+        } else if !gRunning {
+            progressBar.Value := 0
+        }
+    }
 }
 
 
@@ -1851,6 +1929,7 @@ IsRegionMostlyBlack(roi, darkness := 32, grid := 8, brightAllowance := 5) {
     bright := 0
     dx := Max(1, Floor((roi.x2 - roi.x1) / Max(1, grid - 1)))
     dy := Max(1, Floor((roi.y2 - roi.y1) / Max(1, grid - 1)))
+    CoordMode("Pixel", "Client")  ; クライアント領域基準にする（推奨）
 
     Loop grid {
         i := A_Index - 1
@@ -1858,9 +1937,7 @@ IsRegionMostlyBlack(roi, darkness := 32, grid := 8, brightAllowance := 5) {
         Loop grid {
             j := A_Index - 1
             y := roi.y1 + j*dy
-            CoordMode("Pixel", "Client")  ; クライアント領域基準にする（推奨）
             col := PixelGetColor(x, y, "RGB")
-            Log("Color at " x "," y " = " col)
             ; col は 0xRRGGBB
             r := (col >> 16) & 0xFF
             g := (col >> 8)  & 0xFF
@@ -1881,7 +1958,7 @@ IsRegionMostlyBlack(roi, darkness := 32, grid := 8, brightAllowance := 5) {
 WaitImageDisappear(imgList, roi, tol, timeoutMs) {
     endTick := A_TickCount + timeoutMs
     while A_TickCount < endTick {
-        if !FindAnyImage(Img_Ends, roi, tol, &x, &y)
+        if !FindAnyImage(imgList, roi, tol, &x, &y)
             return true
         Sleep 80
     }
@@ -1961,6 +2038,8 @@ LoadConfig(path) {
     global ResultSnapEnabled, ResultSnapDir
     global SaveOCREnabled, SaveOCRDir
     global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
+    global PauseTimeoutMin
 
     NextDirection  := IniRead(path, "main", "NextDirection", NextDirection)
     TotalMatches   := Integer(IniRead(path, "main", "TotalMatches", TotalMatches))
@@ -1997,10 +2076,21 @@ LoadConfig(path) {
     SlackEnabled   := (Integer(IniRead(path, "slack", "Enabled", SlackEnabled?1:0))=1)
     SlackRouterUrl := IniRead(path, "slack", "RouterUrl", SlackRouterUrl)
     SlackTimeoutMs := Integer(IniRead(path, "slack", "TimeoutMs", SlackTimeoutMs))
-    chkSlackEnabled.Value := SlackEnabled
-    edtSlackRouter.Value := SlackRouterUrl
-    edtSlackTimeout.Value := SlackTimeoutMs
-    UpdateSlackUIState()
+    PauseTimeoutMin  := Integer(IniRead(path, "main", "PauseTimeoutMin", PauseTimeoutMin))
+    DiskCheckEnabled := (Integer(IniRead(path, "disk", "CheckEnabled", DiskCheckEnabled?1:0))=1)
+    DiskMinFreeGB    := Integer(IniRead(path, "disk", "MinFreeGB", DiskMinFreeGB))
+    DiskCheckPath    := IniRead(path, "disk", "CheckPath", DiskCheckPath)
+    if IsSet(chkDiskCheckEnabled) && chkDiskCheckEnabled {
+        chkDiskCheckEnabled.Value := DiskCheckEnabled
+        edtDiskMinFreeGB.Value    := DiskMinFreeGB
+        edtDiskCheckPath.Value    := DiskCheckPath
+    }
+    if IsSet(chkSlackEnabled) && chkSlackEnabled {
+        chkSlackEnabled.Value := SlackEnabled
+        edtSlackRouter.Value := SlackRouterUrl
+        edtSlackTimeout.Value := SlackTimeoutMs
+        UpdateSlackUIState()
+    }
 }
 
 ;-- 関数: SaveConfig(path)
@@ -2016,7 +2106,13 @@ SaveConfig(path) {
     global ResultSnapEnabled, ResultSnapDir
     global SaveOCREnabled, SaveOCRDir
     global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
+    global PauseTimeoutMin
 
+    PauseTimeoutMin  := Integer(edtPauseTimeout.Value)
+    DiskCheckEnabled := chkDiskCheckEnabled.Value
+    DiskMinFreeGB    := Integer(edtDiskMinFreeGB.Value)
+    DiskCheckPath    := Trim(edtDiskCheckPath.Value)
     SlackEnabled   := chkSlackEnabled.Value
     SlackRouterUrl := Trim(edtSlackRouter.Value)
     SlackTimeoutMs := Integer(edtSlackTimeout.Value)
@@ -2053,6 +2149,10 @@ SaveConfig(path) {
     IniWrite(SlackEnabled?1:0, path, "slack", "Enabled")
     IniWrite(SlackRouterUrl,   path, "slack", "RouterUrl")
     IniWrite(SlackTimeoutMs,   path, "slack", "TimeoutMs")
+    IniWrite(PauseTimeoutMin,      path, "main", "PauseTimeoutMin")
+    IniWrite(DiskCheckEnabled?1:0, path, "disk", "CheckEnabled")
+    IniWrite(DiskMinFreeGB,        path, "disk", "MinFreeGB")
+    IniWrite(DiskCheckPath,        path, "disk", "CheckPath")
 }
 
 
@@ -2069,7 +2169,19 @@ Log(msg) {
     global gLastLogText
     if IsSet(logBox) && logBox {
         try {
-            logBox.Value .= FormatTime(A_Now, "HH:mm:ss") " - " msg "`r`n"
+            static MAX_LOG_LINES := 500
+            newLine := FormatTime(A_Now, "HH:mm:ss") " - " msg "`r`n"
+            current := logBox.Value
+            lines := StrSplit(current, "`n")
+            if lines.Length > MAX_LOG_LINES {
+                trimmed := ""
+                Loop lines.Length - MAX_LOG_LINES + 1 {
+                    trimmed .= lines[A_Index + (MAX_LOG_LINES - 1)] "`n"
+                }
+                logBox.Value := trimmed . newLine
+            } else {
+                logBox.Value .= newLine
+            }
             static EM_SETSEL := 0x00B1, EM_SCROLLCARET := 0x00B7
             hwnd := logBox.Hwnd
             SendMessage EM_SETSEL, -1, -1, , "ahk_id " hwnd
@@ -2121,7 +2233,7 @@ ExitHandler(*) {
 ;   目的: 停止の処理を停止する。
 ;   引数/返り値: 定義参照
 ForceStopAutomation() {
-    global gRunning, gPaused, gRecording, Key_StopRec
+    global gRunning, gPaused, gRecording, Key_StopRec, UseOBSRecording
     global gSafeStopRequested, gRolloverRequested
     gSafeStopRequested := false
     gRolloverRequested := false
@@ -2141,7 +2253,7 @@ ForceStopAutomation() {
 ;   目的: 停止の処理を停止する。
 ;   引数/返り値: 定義参照
 RequestSafeStop() {
-    global gRunning, gRecording, gSafeStopRequested
+    global gRunning, gRecording, gSafeStopRequested, UseOBSRecording, Key_StopRec
     if !gRunning {
         if UseOBSRecording && gRecording {
             FocusedTriggerOBS(Key_StopRec)
@@ -2635,8 +2747,9 @@ ToggleFullROI() {
 ;   目的: 切り替の処理を切り替える。
 ;   引数/返り値: 定義参照
 TogglePause() {
-    global gPaused
+    global gPaused, gPausedTick
     gPaused := !gPaused
+    gPausedTick := gPaused ? A_TickCount : 0
     TrayTip (gPaused ? "一時停止" : "再開"), "", 900
     Log(gPaused ? "PAUSE" : "RESUME")
 }
