@@ -2121,7 +2121,7 @@ ExitHandler(*) {
 ;   目的: 停止の処理を停止する。
 ;   引数/返り値: 定義参照
 ForceStopAutomation() {
-    global gRunning, gPaused, gRecording, Key_StopRec
+    global gRunning, gPaused, gRecording, Key_StopRec, UseOBSRecording
     global gSafeStopRequested, gRolloverRequested
     gSafeStopRequested := false
     gRolloverRequested := false
@@ -2141,7 +2141,7 @@ ForceStopAutomation() {
 ;   目的: 停止の処理を停止する。
 ;   引数/返り値: 定義参照
 RequestSafeStop() {
-    global gRunning, gRecording, gSafeStopRequested
+    global gRunning, gRecording, gSafeStopRequested, UseOBSRecording, Key_StopRec
     if !gRunning {
         if UseOBSRecording && gRecording {
             FocusedTriggerOBS(Key_StopRec)
