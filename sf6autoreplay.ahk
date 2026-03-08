@@ -2068,7 +2068,19 @@ Log(msg) {
     global gLastLogText
     if IsSet(logBox) && logBox {
         try {
-            logBox.Value .= FormatTime(A_Now, "HH:mm:ss") " - " msg "`r`n"
+            static MAX_LOG_LINES := 500
+            newLine := FormatTime(A_Now, "HH:mm:ss") " - " msg "`r`n"
+            current := logBox.Value
+            lines := StrSplit(current, "`n")
+            if lines.Length > MAX_LOG_LINES {
+                trimmed := ""
+                Loop lines.Length - MAX_LOG_LINES + 1 {
+                    trimmed .= lines[A_Index + (MAX_LOG_LINES - 1)] "`n"
+                }
+                logBox.Value := trimmed . newLine
+            } else {
+                logBox.Value .= newLine
+            }
             static EM_SETSEL := 0x00B1, EM_SCROLLCARET := 0x00B7
             hwnd := logBox.Hwnd
             SendMessage EM_SETSEL, -1, -1, , "ahk_id " hwnd
