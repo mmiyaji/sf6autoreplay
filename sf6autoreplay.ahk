@@ -20,6 +20,7 @@
 #Include %A_ScriptDir%\libs\ps_capture.ahk
 #Include %A_ScriptDir%\libs\AppConfig.ahk
 #Include %A_ScriptDir%\libs\AutomationRunner.ahk
+#Include %A_ScriptDir%\libs\ObsService.ahk
 ; ============================================================
 ; 変数定義
 ; ============================================================
@@ -922,88 +923,6 @@ UpdateStatusText() {
 ; [ブロック] OBS/録画制御
 ; 説明: OBS連携による録画開始・停止・状態監視。
 ;=============================================================================
-
-;-- 関数: FocusedTriggerOBS(keyToSend)
-;   目的: OBSに関する処理を行う。
-;   引数/返り値: 定義参照
-FocusedTriggerOBS(keyToSend) {
-    global OBSWinSelector, UseOBSRecording, AutoRefocusGame
-    if !UseOBSRecording {
-        Log("OBS: key send skipped (UseOBSRecording=false)")
-        return
-    }
-    prev := WinExist("A")
-    if WinExist(OBSWinSelector) {
-        WinActivate OBSWinSelector
-        WinWaitActive OBSWinSelector, , 500
-        Sleep 100                 ; 少し長めに安定待ち
-        Send keyToSend
-        Sleep 60
-        ; OBS操作後は自動でGAMEへ戻す（設定に従う）
-        if AutoRefocusGame
-            EnsureFocusGame()
-        else if prev
-            WinActivate prev
-        Log("OBS: key sent [" keyToSend "]")
-    } else {
-        TrayTip "OBS未検出", OBSWinSelector " が見つかりません", 1200
-        Log("ERROR: OBS window not found for key [" keyToSend "]")
-    }
-}
-
-;-- 関数: RolloverOBS(mode := "instant")
-;   目的: OBSに関する処理を行う。
-;   引数/返り値: 定義参照
-RolloverOBS(mode := "instant") {
-    global UseOBSRecording, UseOBSToggleForRollover, Key_ToggleRec
-    global Key_StopRec, Key_StartRec, gLastRolloverTick
-    if !UseOBSRecording
-        return
-
-    if (UseOBSToggleForRollover && Key_ToggleRec != "") {
-        Log("OBS: rollover via toggle(one-shot) (" mode ")")
-        FocusedTriggerOBS(Key_ToggleRec)   ; ★ 1回だけ送る（OBSが停止→新規開始まで実行）
-        Sleep 800                          ; 切替安定待ち（必要に応じ調整 800～1200ms）
-    } else {
-        Log("OBS: rollover via stop/start (" mode ")")
-        FocusedTriggerOBS(Key_StopRec)
-        Sleep 900
-        FocusedTriggerOBS(Key_StartRec)
-    }
-
-    gLastRolloverTick := A_TickCount
-    StartNewRecordingTextFile("rollover")
-    TrayTip "ローテ", "録画ファイルを切替（" (mode="instant"?"即時":"試合間") "）", 1200
-}
-
-;-- 関数: SendOBSTest()
-;   目的: OBSに関する処理を行う。
-;   引数/返り値: 定義参照
-SendOBSTest() {
-    if !UseOBSRecording {
-        TrayTip "OBS未使用", "設定でOBS録画がOFFです", 1200
-        Log("TEST: OBS test skipped (UseOBSRecording=false)")
-        return
-    }
-    TrayTip "テスト", "録画開始キー送信", 700
-    FocusedTriggerOBS(Key_StartRec)
-    Sleep 700
-    TrayTip "テスト", "録画停止キー送信", 700
-    FocusedTriggerOBS(Key_StopRec)
-}
-
-;-- 関数: StartNewRecordingTextFile(reason := "start")
-;   目的: 録画を開始する。
-;   引数/返り値: 定義参照
-StartNewRecordingTextFile(reason := "start") {
-    global MatchTextDir, gCurrentTextPath, gRecStartTick
-    try DirCreate(MatchTextDir)
-    ts := FormatTime(A_Now, "yyyyMMdd_HHmmss")
-    gCurrentTextPath := MatchTextDir "\sf6_" ts ".txt"
-    gRecStartTick := A_TickCount
-    Log("TEXT: new output file -> " gCurrentTextPath " [" reason "]")
-}
-
 
 ;=============================================================================
 ; [ブロック] OCR/画面認識
