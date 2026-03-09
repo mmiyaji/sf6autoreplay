@@ -253,10 +253,16 @@ UpdateOutputControlStates() {
     global chkSnap, edtSnapDir, btnSnapDir
     global chkOCR, edtOCRDir, btnOCRDir
 
-    edtLogDir.Enabled := (chkLog.Value = 1)
-    btnLogDir.Enabled := (chkLog.Value = 1)
-    edtSnapDir.Enabled := (chkSnap.Value = 1)
-    btnSnapDir.Enabled := (chkSnap.Value = 1)
-    edtOCRDir.Enabled := (chkOCR.Value = 1)
-    btnOCRDir.Enabled := (chkOCR.Value = 1)
+    if IsSet(chkLog) && IsSet(edtLogDir) && IsSet(btnLogDir) {
+        edtLogDir.Enabled := (chkLog.Value = 1)
+        btnLogDir.Enabled := (chkLog.Value = 1)
+    }
+    if IsSet(chkSnap) && IsSet(edtSnapDir) && IsSet(btnSnapDir) {
+        edtSnapDir.Enabled := (chkSnap.Value = 1)
+        btnSnapDir.Enabled := (chkSnap.Value = 1)
+    }
+    if IsSet(chkOCR) && IsSet(edtOCRDir) && IsSet(btnOCRDir) {
+        edtOCRDir.Enabled := (chkOCR.Value = 1)
+        btnOCRDir.Enabled := (chkOCR.Value = 1)
+    }
 }
