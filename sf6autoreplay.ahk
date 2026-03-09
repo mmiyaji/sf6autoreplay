@@ -18,6 +18,7 @@
 #Requires AutoHotkey v2.0
 #Include %A_ScriptDir%\libs\OCR.ahk
 #Include %A_ScriptDir%\libs\ps_capture.ahk
+#Include %A_ScriptDir%\libs\AppConfig.ahk
 ; ============================================================
 ; 変数定義
 ; ============================================================
@@ -330,10 +331,9 @@ chkLog := main.Add("CheckBox", "x50  y150 w270", "ログをファイルに保存
 chkLog.Value := LogEnabled ? 1 : 0
 chkLog.OnEvent("Click", (*) => (
     LogEnabled := (chkLog.Value=1),
-    edtLogDir.Enabled := LogEnabled,
-    btnLogDir.Enabled := LogEnabled
+    UpdateOutputControlStates()
 ))
-edtLogDir.Enabled := LogEnabled, btnLogDir.Enabled := LogEnabled
+UpdateOutputControlStates()
 
 ; 2) キャプチャ（右カラム）
 main.Add("Text",  "x380 y95  w130", "キャプチャ保存先")
@@ -347,10 +347,9 @@ chkSnap := main.Add("CheckBox", "x380 y150 w270", "マッチリザルト画面�
 chkSnap.Value := ResultSnapEnabled ? 1 : 0
 chkSnap.OnEvent("Click", (*) => (
     ResultSnapEnabled := (chkSnap.Value=1),
-    edtSnapDir.Enabled := ResultSnapEnabled,
-    btnSnapDir.Enabled := ResultSnapEnabled
+    UpdateOutputControlStates()
 ))
-edtSnapDir.Enabled := ResultSnapEnabled, btnSnapDir.Enabled := ResultSnapEnabled
+UpdateOutputControlStates()
 
 ; 3) リザルト（OCR）— 下段（左=パス、右=ON/OFF）
 main.Add("Text",  "x50  y190 w130", "OCR保存先")
@@ -364,10 +363,9 @@ chkOCR := main.Add("CheckBox", "x50 y245 w270", "OCRのマッチリザルトを�
 chkOCR.Value := SaveOCREnabled ? 1 : 0
 chkOCR.OnEvent("Click", (*) => (
     SaveOCREnabled := (chkOCR.Value=1),
-    edtOCRDir.Enabled := SaveOCREnabled,
-    btnOCRDir.Enabled := SaveOCREnabled
+    UpdateOutputControlStates()
 ))
-edtOCRDir.Enabled := SaveOCREnabled, btnOCRDir.Enabled := SaveOCREnabled
+UpdateOutputControlStates()
 
 ; -------------------- ログタブ --------------------
 tab.UseTab(4)
@@ -1070,60 +1068,6 @@ InitOCR() {
 ; [ブロック] GUI/ウィンドウ・ログ表示
 ; 説明: GUI構築、ステータスやログ出力などの表示処理。
 ;=============================================================================
-
-;-- 関数: ApplyGuiToVars()
-;   目的: GUIに関する処理を行う。
-;   引数/返り値: 定義参照
-ApplyGuiToVars() {
-    global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
-    global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
-    global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, Img_Ends
-    global GameWinSelector, AutoRefocusGame, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
-    global CloseGameOnStop, GameExitTimeoutMs
-    global LogEnabled, LogDir, AutoScrollLog
-    global ResultSnapEnabled, ResultSnapDir
-    global SaveOCREnabled, SaveOCRDir
-    NextDirection := ddlDir.Text
-    TotalMatches := ToIntSafe(edtMatches.Text, TotalMatches)
-    MaxRunMinutes := ToIntSafe(edtMaxMin.Text, MaxRunMinutes)
-    RolloverMinutes := ToIntSafe(edtRollMin.Text, RolloverMinutes)
-    RolloverMode := ddlRollMode.Text
-    ToleranceEnd := ToIntSafe(edtTol.Text, ToleranceEnd)
-    gUseFullROI := !!chkROI.Value
-    NextRepeats := Max(1, ToIntSafe(edtNextRep.Text, NextRepeats))
-    NextIntervalMs := Max(50, ToIntSafe(edtNextInt.Text, NextIntervalMs))
-    Key_StartRec := edtStart.Text
-    Key_StopRec  := edtStop.Text
-    OBSWinSelector := edtObsSel.Text
-
-    ; 画像GUI(改行)→絶対パス配列
-    Img_Ends := []
-    txt := edtImgs.Value
-    for line in StrSplit(txt, ["`r","`n"], true) {
-        line := Trim(line)
-        if (line != "") {
-            if (SubStr(line,1,1)="\" || InStr(line,":\")) {
-                Img_Ends.Push(line)
-            } else {
-                Img_Ends.Push(A_ScriptDir "\" line)
-            }
-        }
-    }
-    GameWinSelector := edtGameSel.Text
-    AutoRefocusGame := !!chkRefocus.Value
-    UseOBSRecording := !!chkUseOBS.Value
-    Key_ToggleRec := edtToggle.Text
-    UseOBSToggleForRollover := !!chkUseToggle.Value
-    CheckOnStart_Game := !!chkChkGame.Value
-    CheckOnStart_OBS  := !!chkChkOBS.Value
-    CloseGameOnStop := !!chkCloseGame.Value
-    LogEnabled := !!chkLog.Value
-    LogDir := edtLogDir.Text
-    AutoScrollLog := !!chkAutoScroll.Value
-    ResultSnapEnabled := !!chkSnap.Value
-    ResultSnapDir := edtSnapDir.Text
-    SaveOCREnabled := !!chkOCR.Value
-    SaveOCRDir := edtOCRDir.Text
 }
 ;-- 関数: BuildStatusBase()
 ;   目的: UIを組み立てる。
@@ -1186,47 +1130,6 @@ TruncForStatus(msg, maxChars := 60) {
     msg := RegExReplace(msg, "\R", " ")
     return (StrLen(msg) > maxChars) ? SubStr(msg, 1, maxChars-1) "…" : msg
 }
-;-- 関数: UpdateGuiFromVars()
-;   目的: GUIを更新する。
-;   引数/返り値: 定義参照
-UpdateGuiFromVars() {
-    ddlDir.Text := NextDirection
-    edtMatches.Text := TotalMatches
-    edtMaxMin.Text := MaxRunMinutes
-    edtRollMin.Text := RolloverMinutes
-    ddlRollMode.Text := RolloverMode
-    edtTol.Text := ToleranceEnd
-    chkROI.Value := gUseFullROI ? 1 : 0
-    edtNextRep.Text := NextRepeats
-    edtNextInt.Text := NextIntervalMs
-    edtStart.Text := Key_StartRec
-    edtStop.Text  := Key_StopRec
-    edtObsSel.Text := OBSWinSelector
-    ; 配列→相対パス改行
-    rels := []
-    for img in Img_Ends {
-        rel := StrReplace(img, A_ScriptDir "\")
-        rels.Push(rel)
-    }
-    edtImgs.Value := StrJoin(rels, "`n")
-    edtGameSel.Text := GameWinSelector
-    chkRefocus.Value := AutoRefocusGame ? 1 : 0
-    chkUseOBS.Value := UseOBSRecording ? 1 : 0
-    chkChkGame.Value := CheckOnStart_Game ? 1 : 0
-    chkChkOBS.Value := CheckOnStart_OBS ? 1 : 0
-    edtToggle.Text := Key_ToggleRec
-    chkUseToggle.Value := UseOBSToggleForRollover ? 1 : 0
-    chkCloseGame.Value := CloseGameOnStop ? 1 : 0
-    chkLog.Value := LogEnabled ? 1 : 0
-    edtLogDir.Text := LogDir
-    chkSnap.Value := ResultSnapEnabled ? 1 : 0
-    edtSnapDir.Text := ResultSnapDir
-    chkOCR.Value := SaveOCREnabled ? 1 : 0
-    edtOCRDir.Text := SaveOCRDir
-    chkAutoScroll.Value := AutoScrollLog ? 1 : 0
-    UpdatePauseBtn()
-}
-
 ;-- 関数: UpdateStatusText()
 ;   目的: ステータスを更新する。
 ;   引数/返り値: 定義参照
@@ -2024,138 +1927,6 @@ GetROI_Load_Default() {
     sw := A_ScreenWidth, sh := A_ScreenHeight
     return {x1: Round(sw*0.20), y1: Round(sh*0.20), x2: Round(sw*0.80), y2: Round(sh*0.80)}
 }
-
-;-- 関数: LoadConfig(path)
-;   目的: 設定を読み込む。
-;   引数/返り値: 定義参照
-LoadConfig(path) {
-    global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
-    global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
-    global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, GameWinSelector, AutoRefocusGame
-    global Img_Ends, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
-    global CloseGameOnStop, GameExitTimeoutMs
-    global LogEnabled, LogDir, AutoScrollLog
-    global ResultSnapEnabled, ResultSnapDir
-    global SaveOCREnabled, SaveOCRDir
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
-    global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
-    global PauseTimeoutMin
-
-    NextDirection  := IniRead(path, "main", "NextDirection", NextDirection)
-    TotalMatches   := Integer(IniRead(path, "main", "TotalMatches", TotalMatches))
-    MaxRunMinutes  := Integer(IniRead(path, "main", "MaxRunMinutes", MaxRunMinutes))
-    RolloverMinutes:= Integer(IniRead(path, "main", "RolloverMinutes", RolloverMinutes))
-    RolloverMode   := IniRead(path, "main", "RolloverMode", RolloverMode)
-    ToleranceEnd   := Integer(IniRead(path, "main", "ToleranceEnd", ToleranceEnd))
-    gUseFullROI    := (Integer(IniRead(path, "main", "UseFullROI", gUseFullROI?1:0))=1)
-    NextRepeats    := Integer(IniRead(path, "main", "NextRepeats", NextRepeats))
-    NextIntervalMs := Integer(IniRead(path, "main", "NextIntervalMs", NextIntervalMs))
-    Key_StartRec   := IniRead(path, "obs", "StartKey", Key_StartRec)
-    Key_StopRec    := IniRead(path, "obs", "StopKey",  Key_StopRec)
-    Key_ToggleRec  := IniRead(path, "obs", "ToggleKey", Key_ToggleRec)
-    OBSWinSelector := IniRead(path, "obs", "WindowSelector", OBSWinSelector)
-    UseOBSRecording := (Integer(IniRead(path, "obs", "UseRecording", UseOBSRecording?1:0))=1)
-    UseOBSToggleForRollover := (Integer(IniRead(path, "obs", "UseToggleForRollover", UseOBSToggleForRollover?1:0))=1)
-    CheckOnStart_OBS := (Integer(IniRead(path, "obs", "CheckOnStart", CheckOnStart_OBS?1:0))=1)
-    GameWinSelector := IniRead(path, "game", "WindowSelector", GameWinSelector)
-    AutoRefocusGame := (Integer(IniRead(path, "game", "AutoRefocus", AutoRefocusGame?1:0))=1)
-    CheckOnStart_Game := (Integer(IniRead(path, "game", "CheckOnStart", CheckOnStart_Game?1:0))=1)
-    CloseGameOnStop := (Integer(IniRead(path, "game", "CloseOnStop", CloseGameOnStop?1:0))=1)
-    GameExitTimeoutMs := Integer(IniRead(path, "game", "ExitTimeoutMs", GameExitTimeoutMs))
-    imgs := IniRead(path, "images", "EndImages", "")
-    if (imgs != "") {
-        Img_Ends := SplitList(imgs, ";")
-    }
-    LogEnabled := (Integer(IniRead(path, "log", "Enabled", LogEnabled?1:0))=1)
-    LogDir     := IniRead(path, "log", "Dir", LogDir)
-    ResultSnapEnabled := (Integer(IniRead(path, "log", "ResultSnapEnabled", ResultSnapEnabled?1:0))=1)
-    ResultSnapDir := IniRead(path, "log", "ResultSnapDir", ResultSnapDir)
-    SaveOCREnabled := (Integer(IniRead(path, "ocr", "SaveOCREnabled", SaveOCREnabled?1:0))=1)
-    SaveOCRDir := IniRead(path, "ocr", "SaveOCRDir", SaveOCRDir)
-    AutoScrollLog := (Integer(IniRead(path, "log", "AutoScroll", AutoScrollLog?1:0))=1)
-    SlackEnabled   := (Integer(IniRead(path, "slack", "Enabled", SlackEnabled?1:0))=1)
-    SlackRouterUrl := IniRead(path, "slack", "RouterUrl", SlackRouterUrl)
-    SlackTimeoutMs := Integer(IniRead(path, "slack", "TimeoutMs", SlackTimeoutMs))
-    PauseTimeoutMin  := Integer(IniRead(path, "main", "PauseTimeoutMin", PauseTimeoutMin))
-    DiskCheckEnabled := (Integer(IniRead(path, "disk", "CheckEnabled", DiskCheckEnabled?1:0))=1)
-    DiskMinFreeGB    := Integer(IniRead(path, "disk", "MinFreeGB", DiskMinFreeGB))
-    DiskCheckPath    := IniRead(path, "disk", "CheckPath", DiskCheckPath)
-    if IsSet(chkDiskCheckEnabled) && chkDiskCheckEnabled {
-        chkDiskCheckEnabled.Value := DiskCheckEnabled
-        edtDiskMinFreeGB.Value    := DiskMinFreeGB
-        edtDiskCheckPath.Value    := DiskCheckPath
-    }
-    if IsSet(chkSlackEnabled) && chkSlackEnabled {
-        chkSlackEnabled.Value := SlackEnabled
-        edtSlackRouter.Value := SlackRouterUrl
-        edtSlackTimeout.Value := SlackTimeoutMs
-        UpdateSlackUIState()
-    }
-}
-
-;-- 関数: SaveConfig(path)
-;   目的: 設定を保存する。
-;   引数/返り値: 定義参照
-SaveConfig(path) {
-    global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
-    global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
-    global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, GameWinSelector, AutoRefocusGame
-    global Img_Ends, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
-    global CloseGameOnStop, GameExitTimeoutMs
-    global LogEnabled, LogDir, AutoScrollLog
-    global ResultSnapEnabled, ResultSnapDir
-    global SaveOCREnabled, SaveOCRDir
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
-    global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
-    global PauseTimeoutMin
-
-    PauseTimeoutMin  := Integer(edtPauseTimeout.Value)
-    DiskCheckEnabled := chkDiskCheckEnabled.Value
-    DiskMinFreeGB    := Integer(edtDiskMinFreeGB.Value)
-    DiskCheckPath    := Trim(edtDiskCheckPath.Value)
-    SlackEnabled   := chkSlackEnabled.Value
-    SlackRouterUrl := Trim(edtSlackRouter.Value)
-    SlackTimeoutMs := Integer(edtSlackTimeout.Value)
-
-    IniWrite(NextDirection,  path, "main", "NextDirection")
-    IniWrite(TotalMatches,   path, "main", "TotalMatches")
-    IniWrite(MaxRunMinutes,  path, "main", "MaxRunMinutes")
-    IniWrite(RolloverMinutes,path, "main", "RolloverMinutes")
-    IniWrite(RolloverMode,   path, "main", "RolloverMode")
-    IniWrite(ToleranceEnd,   path, "main", "ToleranceEnd")
-    IniWrite(gUseFullROI?1:0,path, "main", "UseFullROI")
-    IniWrite(NextRepeats,    path, "main", "NextRepeats")
-    IniWrite(NextIntervalMs, path, "main", "NextIntervalMs")
-    IniWrite(Key_StartRec,   path, "obs",  "StartKey")
-    IniWrite(Key_StopRec,    path, "obs",  "StopKey")
-    IniWrite(Key_ToggleRec,  path, "obs",  "ToggleKey")
-    IniWrite(OBSWinSelector, path, "obs",  "WindowSelector")
-    IniWrite(UseOBSRecording?1:0, path, "obs", "UseRecording")
-    IniWrite(UseOBSToggleForRollover?1:0, path, "obs", "UseToggleForRollover")
-    IniWrite(CheckOnStart_OBS?1:0, path, "obs", "CheckOnStart")
-    IniWrite(GameWinSelector,           path, "game", "WindowSelector")
-    IniWrite(AutoRefocusGame?1:0,       path, "game", "AutoRefocus")
-    IniWrite(CheckOnStart_Game?1:0,     path, "game", "CheckOnStart")
-    IniWrite(CloseGameOnStop?1:0, path, "game", "CloseOnStop")
-    IniWrite(GameExitTimeoutMs,   path, "game", "ExitTimeoutMs")
-    IniWrite(JoinList(Img_Ends, ";"),   path, "images", "EndImages")
-    IniWrite(LogEnabled?1:0, path, "log", "Enabled")
-    IniWrite(LogDir,         path, "log", "Dir")
-    IniWrite(ResultSnapEnabled?1:0, path, "log", "ResultSnapEnabled")
-    IniWrite(ResultSnapDir, path, "log", "ResultSnapDir")
-    IniWrite(SaveOCREnabled?1:0, path, "ocr", "SaveOCREnabled")
-    IniWrite(SaveOCRDir, path, "ocr", "SaveOCRDir")
-    IniWrite(AutoScrollLog?1:0, path, "log", "AutoScroll")
-    IniWrite(SlackEnabled?1:0, path, "slack", "Enabled")
-    IniWrite(SlackRouterUrl,   path, "slack", "RouterUrl")
-    IniWrite(SlackTimeoutMs,   path, "slack", "TimeoutMs")
-    IniWrite(PauseTimeoutMin,      path, "main", "PauseTimeoutMin")
-    IniWrite(DiskCheckEnabled?1:0, path, "disk", "CheckEnabled")
-    IniWrite(DiskMinFreeGB,        path, "disk", "MinFreeGB")
-    IniWrite(DiskCheckPath,        path, "disk", "CheckPath")
-}
-
-
 ;=============================================================================
 ; [ブロック] ログ/ファイル
 ; 説明: ログ出力やファイルローテーション処理。
@@ -3098,5 +2869,6 @@ SlackNotify(text, level := "info") {
     } catch {
     }
 }
+
 
 
