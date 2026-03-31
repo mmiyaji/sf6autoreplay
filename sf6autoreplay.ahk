@@ -8,7 +8,7 @@
 ; ============================================================
 ;@Ahk2Exe-SetName       SF6 Auto Replay
 ;@Ahk2Exe-SetDescription SF6 Auto Replay Recorder
-;@Ahk2Exe-SetVersion    1.0.0.0
+;@Ahk2Exe-SetVersion    1.0.0.0 
 ;@Ahk2Exe-SetCompanyName mmiyaji
 ;@Ahk2Exe-SetCopyright  (c) 2025 mmiyaji
 ;@Ahk2Exe-SetMainIcon   icons\rec_icon.ico
@@ -123,9 +123,11 @@ DiskMinFreeGB    := 10
 DiskCheckPath    := "C:\"
 
 ; ---- Slack ----
-SlackEnabled   := false
-SlackRouterUrl := ""
-SlackTimeoutMs := 5000
+SlackEnabled      := false
+SlackNotifyMethod := "webhook"
+SlackWebhookUrl   := ""
+SlackRouterUrl    := ""
+SlackTimeoutMs    := 5000
 
 ; ===== パネル（結果ウィンドウ）全体の相対位置 =====
 Clamp01(v) => Max(0, Min(1, v+0.0))
@@ -415,24 +417,35 @@ chkSlackEnabled := main.Add("CheckBox"
     , "x35 y80 vUI_SlackEnabled"
     , "開始／録画切り替え／終了時のSlack通知を有効化")
 
-; --- Router URL ---
-main.Add("Text", "x35 y120", "Router URL")
-edtSlackRouter := main.Add("Edit"
-    , "x130 y116 w540 vUI_SlackRouterUrl")
+; --- 送信方式 ---
+main.Add("Text", "x35 y120", "通知方法")
+ddlSlackMethod := main.Add("DropDownList"
+    , "x130 y116 w180 vUI_SlackNotifyMethod Choose1"
+    , ["Incoming Webhook", "CF Router (任意)"])
 
-    ; デプロイ案内（クリックでGitHubを開く）
-main.Add("Text", "x35 y250", "Slack通知を使うには slack-message-router を事前にデプロイしてください：")
-main.Add("Link", "x35 y275 w640", '<a href="https://github.com/mmiyaji/slack-message-router">https://github.com/mmiyaji/slack-message-router</a>')
+; --- Webhook URL ---
+main.Add("Text", "x35 y160", "Webhook URL")
+edtSlackWebhook := main.Add("Edit"
+    , "x130 y156 w540 vUI_SlackWebhookUrl")
+
+; --- Router URL ---
+main.Add("Text", "x35 y200", "CF Router URL")
+edtSlackRouter := main.Add("Edit"
+    , "x130 y196 w540 vUI_SlackRouterUrl")
+
+; デプロイ案内（クリックでGitHubを開く）
+main.Add("Text", "x35 y280", "CF Router を使う場合だけ slack-message-router を事前にデプロイしてください：")
+main.Add("Link", "x35 y305 w640", '<a href="https://github.com/mmiyaji/slack-message-router">https://github.com/mmiyaji/slack-message-router</a>')
 
 ; --- Timeout ---
-main.Add("Text", "x35 y160", "Timeout (ms)")
+main.Add("Text", "x35 y240", "Timeout (ms)")
 edtSlackTimeout := main.Add("Edit"
-    , "x130 y156 w120 Number vUI_SlackTimeoutMs")
-main.Add("Text", "x260 y160", "例: 2000")
+    , "x130 y236 w120 Number vUI_SlackTimeoutMs")
+main.Add("Text", "x260 y240", "例: 2000")
 
 ; --- テスト送信 ---
 btnSlackTest := main.Add("Button"
-    , "x35 y210 w150 h30"
+    , "x35 y340 w150 h30"
     , "Slackテスト送信")
 btnSlackTest.OnEvent("Click", SlackTestSend)
 
@@ -440,27 +453,34 @@ btnSlackTest.OnEvent("Click", SlackTestSend)
 UpdateSlackUIState()
 
 UpdateSlackUIState() {
-    global chkSlackEnabled, edtSlackRouter, edtSlackTimeout
+    global chkSlackEnabled, ddlSlackMethod, edtSlackWebhook, edtSlackRouter, edtSlackTimeout
     enabled := chkSlackEnabled.Value
-    edtSlackRouter.Enabled := enabled
+    method := SlackMethodFromLabel(ddlSlackMethod.Text)
+
+    ddlSlackMethod.Enabled := enabled
+    edtSlackWebhook.Enabled := enabled && (method = "webhook")
+    edtSlackRouter.Enabled := enabled && (method = "router")
     edtSlackTimeout.Enabled := enabled
 }
 chkSlackEnabled.OnEvent("Click", (*) => UpdateSlackUIState())
+ddlSlackMethod.OnEvent("Change", (*) => UpdateSlackUIState())
 SlackTestSend(*) {
-    global chkSlackEnabled, edtSlackRouter, edtSlackTimeout
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global chkSlackEnabled, ddlSlackMethod, edtSlackWebhook, edtSlackRouter, edtSlackTimeout
+    global SlackEnabled, SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl, SlackTimeoutMs
 
     ; UI → 変数に反映（保存前でもテスト可能）
-    SlackEnabled   := chkSlackEnabled.Value
-    SlackRouterUrl := Trim(edtSlackRouter.Value)
-    SlackTimeoutMs := Integer(edtSlackTimeout.Value)
+    SlackEnabled      := chkSlackEnabled.Value
+    SlackNotifyMethod := SlackMethodFromLabel(ddlSlackMethod.Text)
+    SlackWebhookUrl   := Trim(edtSlackWebhook.Value)
+    SlackRouterUrl    := Trim(edtSlackRouter.Value)
+    SlackTimeoutMs    := Integer(edtSlackTimeout.Value)
 
     if (!SlackEnabled) {
         MsgBox("Slack通知が無効です", "テスト送信", 48)
         return
     }
-    if (SlackRouterUrl = "") {
-        MsgBox("Router URL が未設定です", "テスト送信", 48)
+    if (!IsSlackDestinationConfigured()) {
+        MsgBox(GetSlackDestinationErrorMessage(), "テスト送信", 48)
         return
     }
 
@@ -837,7 +857,7 @@ InitOCR() {
 ; [ブロック] GUI/ウィンドウ・ログ表示
 ; 説明: GUI構築、ステータスやログ出力などの表示処理。
 ;=============================================================================
-}
+
 ;-- 関数: BuildStatusBase()
 ;   目的: UIを組み立てる。
 ;   引数/返り値: 定義参照
@@ -879,7 +899,6 @@ GetROI_Load_WindowCenter(winSel, fracX := 0.30, fracY := 0.30) {
     y2 := y1 + h
     return {x1:x1, y1:y1, x2:x2, y2:y2}
 }
-
 ;-- 関数: SetStatus(text)
 ;   目的: ステータスに関する処理を行う。
 ;   引数/返り値: 定義参照
@@ -2528,27 +2547,26 @@ MiniCap_PrepareWindow(hwnd) {
 }
 
 ; =========================
-; Slack Notify (via slack-message-router)
+; Slack Notify
 ; =========================
 
 SlackNotify(text, level := "info") {
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global SlackEnabled, SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl, SlackTimeoutMs
 
     if (!SlackEnabled)
         return
-    if (SlackRouterUrl = "")
+    if (!IsSlackDestinationConfigured())
         return
 
-    text := StrReplace(text, "\", "\\")
-    text := StrReplace(text, "`"", "`"`"" )
-    text := StrReplace(text, "`r", "\r")
-    text := StrReplace(text, "`n", "\n")
-
-    body := "{`"text`":`"" text "`",`"level`":`"" level "`"}"
+    method := SlackNotifyMethod
+    url := (method = "router") ? SlackRouterUrl : SlackWebhookUrl
+    body := (method = "router")
+        ? "{`"text`":`"" SlackJsonEscape(text) "`",`"level`":`"" SlackJsonEscape(level) "`"}"
+        : "{`"text`":`"" SlackJsonEscape(text) "`"}"
 
     try {
         req := ComObject("WinHttp.WinHttpRequest.5.1")
-        req.Open("POST", SlackRouterUrl, false)
+        req.Open("POST", url, false)
         req.SetRequestHeader("Content-Type", "application/json; charset=utf-8")
         t := SlackTimeoutMs ? SlackTimeoutMs : 2000
         req.SetTimeouts(t, t, t, t)
@@ -2557,5 +2575,32 @@ SlackNotify(text, level := "info") {
     }
 }
 
+SlackMethodFromLabel(label) {
+    return InStr(label, "CF Router") ? "router" : "webhook"
+}
 
+SlackMethodToLabel(method) {
+    return (method = "router") ? "CF Router (任意)" : "Incoming Webhook"
+}
 
+IsSlackDestinationConfigured() {
+    global SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl
+    return (SlackNotifyMethod = "router")
+        ? (SlackRouterUrl != "")
+        : (SlackWebhookUrl != "")
+}
+
+GetSlackDestinationErrorMessage() {
+    global SlackNotifyMethod
+    return (SlackNotifyMethod = "router")
+        ? "CF Router URL が未設定です"
+        : "Webhook URL が未設定です"
+}
+
+SlackJsonEscape(text) {
+    text := StrReplace(text, "\", "\\")
+    text := StrReplace(text, "`"", "`"`"")
+    text := StrReplace(text, "`r", "\r")
+    text := StrReplace(text, "`n", "\n")
+    return text
+}

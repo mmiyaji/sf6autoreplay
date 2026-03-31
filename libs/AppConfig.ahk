@@ -7,7 +7,7 @@ ApplyGuiToVars() {
     global LogEnabled, LogDir, AutoScrollLog
     global ResultSnapEnabled, ResultSnapDir
     global SaveOCREnabled, SaveOCRDir
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global SlackEnabled, SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl, SlackTimeoutMs
     global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
     global PauseTimeoutMin
 
@@ -47,6 +47,8 @@ ApplyGuiToVars() {
     DiskCheckPath := Trim(edtDiskCheckPath.Value)
 
     SlackEnabled := !!chkSlackEnabled.Value
+    SlackNotifyMethod := SlackMethodFromLabel(ddlSlackMethod.Text)
+    SlackWebhookUrl := Trim(edtSlackWebhook.Value)
     SlackRouterUrl := Trim(edtSlackRouter.Value)
     SlackTimeoutMs := ToIntSafe(edtSlackTimeout.Value, SlackTimeoutMs)
 }
@@ -60,7 +62,7 @@ UpdateGuiFromVars() {
     global LogEnabled, LogDir, AutoScrollLog
     global ResultSnapEnabled, ResultSnapDir
     global SaveOCREnabled, SaveOCRDir
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global SlackEnabled, SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl, SlackTimeoutMs
     global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
 
     ddlDir.Text := NextDirection
@@ -99,6 +101,8 @@ UpdateGuiFromVars() {
     edtDiskCheckPath.Value := DiskCheckPath
 
     chkSlackEnabled.Value := SlackEnabled ? 1 : 0
+    ddlSlackMethod.Text := SlackMethodToLabel(SlackNotifyMethod)
+    edtSlackWebhook.Value := SlackWebhookUrl
     edtSlackRouter.Value := SlackRouterUrl
     edtSlackTimeout.Value := SlackTimeoutMs
 
@@ -116,7 +120,7 @@ LoadConfig(path) {
     global LogEnabled, LogDir, AutoScrollLog
     global ResultSnapEnabled, ResultSnapDir
     global SaveOCREnabled, SaveOCRDir
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global SlackEnabled, SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl, SlackTimeoutMs
     global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
     global PauseTimeoutMin
 
@@ -159,8 +163,12 @@ LoadConfig(path) {
     SaveOCRDir := IniRead(path, "ocr", "SaveOCRDir", SaveOCRDir)
 
     SlackEnabled := (Integer(IniRead(path, "slack", "Enabled", SlackEnabled ? 1 : 0)) = 1)
+    SlackNotifyMethod := IniRead(path, "slack", "Method", SlackNotifyMethod)
+    SlackWebhookUrl := IniRead(path, "slack", "WebhookUrl", SlackWebhookUrl)
     SlackRouterUrl := IniRead(path, "slack", "RouterUrl", SlackRouterUrl)
     SlackTimeoutMs := Integer(IniRead(path, "slack", "TimeoutMs", SlackTimeoutMs))
+    if (SlackNotifyMethod != "webhook" && SlackNotifyMethod != "router")
+        SlackNotifyMethod := (SlackWebhookUrl != "") ? "webhook" : ((SlackRouterUrl != "") ? "router" : "webhook")
 
     DiskCheckEnabled := (Integer(IniRead(path, "disk", "CheckEnabled", DiskCheckEnabled ? 1 : 0)) = 1)
     DiskMinFreeGB := Integer(IniRead(path, "disk", "MinFreeGB", DiskMinFreeGB))
@@ -176,7 +184,7 @@ SaveConfig(path) {
     global LogEnabled, LogDir, AutoScrollLog
     global ResultSnapEnabled, ResultSnapDir
     global SaveOCREnabled, SaveOCRDir
-    global SlackEnabled, SlackRouterUrl, SlackTimeoutMs
+    global SlackEnabled, SlackNotifyMethod, SlackWebhookUrl, SlackRouterUrl, SlackTimeoutMs
     global DiskCheckEnabled, DiskMinFreeGB, DiskCheckPath
     global PauseTimeoutMin
 
@@ -219,6 +227,8 @@ SaveConfig(path) {
     IniWrite(SaveOCRDir, path, "ocr", "SaveOCRDir")
 
     IniWrite(SlackEnabled ? 1 : 0, path, "slack", "Enabled")
+    IniWrite(SlackNotifyMethod, path, "slack", "Method")
+    IniWrite(SlackWebhookUrl, path, "slack", "WebhookUrl")
     IniWrite(SlackRouterUrl, path, "slack", "RouterUrl")
     IniWrite(SlackTimeoutMs, path, "slack", "TimeoutMs")
 
