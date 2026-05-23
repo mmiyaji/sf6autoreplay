@@ -289,16 +289,16 @@ main.Add("Text", "x70  y270 w265", "オフの場合は録画停止→再開操�
 chkUseToggle.Value := UseOBSToggleForRollover ? 1 : 0
 chkUseToggle.OnEvent("Click", (*) => (UseOBSToggleForRollover := (chkUseToggle.Value=1)))
 
-main.Add("Text", "x50 y300 w80", "OBS mode")
-ddlObsMode := main.Add("DropDownList", "x125 y296 w90", ["hotkey","api"])
-main.Add("Text", "x225 y300 w35", "host")
-edtObsWsHost := main.Add("Edit", "x260 y296 w95", OBSWebSocketHost)
-main.Add("Text", "x365 y300 w30", "port")
-edtObsWsPort := main.Add("Edit", "x395 y296 w55 Number", OBSWebSocketPort)
-main.Add("Text", "x460 y300 w55", "timeout")
-edtObsWsTimeout := main.Add("Edit", "x515 y296 w60 Number", OBSWebSocketTimeoutMs)
-main.Add("Text", "x50 y330 w70", "WS pass")
-edtObsWsPassword := main.Add("Edit", "x125 y326 w200 Password", OBSWebSocketPassword)
+main.Add("Text", "x50 y330 w80", "OBS mode")
+ddlObsMode := main.Add("DropDownList", "x125 y326 w90", ["hotkey","api"])
+main.Add("Text", "x225 y330 w35", "host")
+edtObsWsHost := main.Add("Edit", "x260 y326 w105", OBSWebSocketHost)
+main.Add("Text", "x375 y330 w30", "port")
+edtObsWsPort := main.Add("Edit", "x405 y326 w55 Number", OBSWebSocketPort)
+main.Add("Text", "x470 y330 w55", "timeout")
+edtObsWsTimeout := main.Add("Edit", "x525 y326 w60 Number", OBSWebSocketTimeoutMs)
+main.Add("Text", "x50 y360 w70", "WS pass")
+edtObsWsPassword := main.Add("Edit", "x125 y356 w240 Password", OBSWebSocketPassword)
 
 ; ── 検出 / 遷移（右側）
 grpDetect := main.Add("GroupBox", "x355 y70 w330 h250", "検出 / 遷移")
@@ -410,6 +410,8 @@ btnOCRTest := main.Add("Button", "x35 y160 w150 h30", "リザルトOCRテスト"
 btnTestName := main.Add("Button", "x35 y200 w150 h30", "リザルトOCRテスト(詳細)")
 
 ; -------------------- ディスクチェックタブ --------------------
+btnObsApiTest := main.Add("Button", "x35 y240 w150 h30", "OBS WebSocket Test")
+
 tab.UseTab(6)
 grpDisk := main.Add("GroupBox", "x20 y45 w680 h200", "ディスク容量チェック")
 chkDiskCheckEnabled := main.Add("CheckBox"
@@ -580,6 +582,7 @@ btnOBSoff.OnEvent("Click",(*) => (OBSStopRecording(),  RefocusGame()))
 btnTestBlack.OnEvent("Click", (*) => (RefocusGame(), TestBlackWait()))
 btnOCRTest.OnEvent("Click", (*) => (RefocusGame(), OCR_TestButton()))
 btnTestName.OnEvent("Click", (*) => (RefocusGame(), OCR_TestResultButton(GameWinSelector)))
+btnObsApiTest.OnEvent("Click", (*) => OBSWebSocketTest())
 
 ; ============================================================
 ; ホットキー
@@ -615,6 +618,16 @@ OnExit(ExitHandler)
 ;   引数/返り値: 定義参照
 StartAutomation() {
     AutomationRun()
+}
+
+OBSWebSocketTest() {
+    ApplyGuiToVars()
+    ok := OBSWebSocketRequest("status")
+    if ok {
+        MsgBox("OBS WebSocket connection OK. See log for status details.", "OBS WebSocket Test", 64)
+    } else {
+        MsgBox("OBS WebSocket connection failed. Check host, port, password, and OBS WebSocket server setting. See log for details.", "OBS WebSocket Test", 48)
+    }
 }
 
 FormatDuration(ms) {
