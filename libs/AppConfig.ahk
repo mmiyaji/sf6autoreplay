@@ -2,6 +2,7 @@ ApplyGuiToVars() {
     global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
     global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
     global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, Img_Ends
+    global OBSControlMode, OBSWebSocketHost, OBSWebSocketPort, OBSWebSocketPassword, OBSWebSocketTimeoutMs
     global GameWinSelector, AutoRefocusGame, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
     global LogEnabled, LogDir, AutoScrollLog
@@ -23,6 +24,11 @@ ApplyGuiToVars() {
     Key_StartRec := edtStart.Text
     Key_StopRec := edtStop.Text
     Key_ToggleRec := edtToggle.Text
+    OBSControlMode := ddlObsMode.Text
+    OBSWebSocketHost := Trim(edtObsWsHost.Text)
+    OBSWebSocketPort := ToIntSafe(edtObsWsPort.Text, OBSWebSocketPort)
+    OBSWebSocketPassword := edtObsWsPassword.Text
+    OBSWebSocketTimeoutMs := ToIntSafe(edtObsWsTimeout.Text, OBSWebSocketTimeoutMs)
     OBSWinSelector := edtObsSel.Text
     Img_Ends := NormalizeEndImagePaths(edtImgs.Value)
     GameWinSelector := edtGameSel.Text
@@ -57,6 +63,7 @@ UpdateGuiFromVars() {
     global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
     global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
     global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, Img_Ends
+    global OBSControlMode, OBSWebSocketHost, OBSWebSocketPort, OBSWebSocketPassword, OBSWebSocketTimeoutMs
     global GameWinSelector, AutoRefocusGame, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, PauseTimeoutMin
     global LogEnabled, LogDir, AutoScrollLog
@@ -77,6 +84,11 @@ UpdateGuiFromVars() {
     edtStart.Text := Key_StartRec
     edtStop.Text := Key_StopRec
     edtToggle.Text := Key_ToggleRec
+    ddlObsMode.Text := OBSControlMode
+    edtObsWsHost.Text := OBSWebSocketHost
+    edtObsWsPort.Text := OBSWebSocketPort
+    edtObsWsPassword.Text := OBSWebSocketPassword
+    edtObsWsTimeout.Text := OBSWebSocketTimeoutMs
     edtObsSel.Text := OBSWinSelector
     edtImgs.Value := BuildEndImageGuiText(Img_Ends)
     edtGameSel.Text := GameWinSelector
@@ -115,6 +127,7 @@ LoadConfig(path) {
     global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
     global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
     global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, GameWinSelector, AutoRefocusGame
+    global OBSControlMode, OBSWebSocketHost, OBSWebSocketPort, OBSWebSocketPassword, OBSWebSocketTimeoutMs
     global Img_Ends, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
     global LogEnabled, LogDir, AutoScrollLog
@@ -138,6 +151,13 @@ LoadConfig(path) {
     Key_StartRec := IniRead(path, "obs", "StartKey", Key_StartRec)
     Key_StopRec := IniRead(path, "obs", "StopKey", Key_StopRec)
     Key_ToggleRec := IniRead(path, "obs", "ToggleKey", Key_ToggleRec)
+    OBSControlMode := IniRead(path, "obs", "ControlMode", OBSControlMode)
+    if (OBSControlMode != "hotkey" && OBSControlMode != "api")
+        OBSControlMode := "hotkey"
+    OBSWebSocketHost := IniRead(path, "obs", "WebSocketHost", OBSWebSocketHost)
+    OBSWebSocketPort := Integer(IniRead(path, "obs", "WebSocketPort", OBSWebSocketPort))
+    OBSWebSocketPassword := IniRead(path, "obs", "WebSocketPassword", OBSWebSocketPassword)
+    OBSWebSocketTimeoutMs := Integer(IniRead(path, "obs", "WebSocketTimeoutMs", OBSWebSocketTimeoutMs))
     OBSWinSelector := IniRead(path, "obs", "WindowSelector", OBSWinSelector)
     UseOBSRecording := (Integer(IniRead(path, "obs", "UseRecording", UseOBSRecording ? 1 : 0)) = 1)
     UseOBSToggleForRollover := (Integer(IniRead(path, "obs", "UseToggleForRollover", UseOBSToggleForRollover ? 1 : 0)) = 1)
@@ -179,6 +199,7 @@ SaveConfig(path) {
     global NextDirection, TotalMatches, MaxRunMinutes, RolloverMinutes, RolloverMode
     global ToleranceEnd, gUseFullROI, NextRepeats, NextIntervalMs
     global Key_StartRec, Key_StopRec, Key_ToggleRec, OBSWinSelector, GameWinSelector, AutoRefocusGame
+    global OBSControlMode, OBSWebSocketHost, OBSWebSocketPort, OBSWebSocketPassword, OBSWebSocketTimeoutMs
     global Img_Ends, UseOBSRecording, UseOBSToggleForRollover, CheckOnStart_Game, CheckOnStart_OBS
     global CloseGameOnStop, GameExitTimeoutMs
     global LogEnabled, LogDir, AutoScrollLog
@@ -204,6 +225,11 @@ SaveConfig(path) {
     IniWrite(Key_StartRec, path, "obs", "StartKey")
     IniWrite(Key_StopRec, path, "obs", "StopKey")
     IniWrite(Key_ToggleRec, path, "obs", "ToggleKey")
+    IniWrite(OBSControlMode, path, "obs", "ControlMode")
+    IniWrite(OBSWebSocketHost, path, "obs", "WebSocketHost")
+    IniWrite(OBSWebSocketPort, path, "obs", "WebSocketPort")
+    IniWrite(OBSWebSocketPassword, path, "obs", "WebSocketPassword")
+    IniWrite(OBSWebSocketTimeoutMs, path, "obs", "WebSocketTimeoutMs")
     IniWrite(OBSWinSelector, path, "obs", "WindowSelector")
     IniWrite(UseOBSRecording ? 1 : 0, path, "obs", "UseRecording")
     IniWrite(UseOBSToggleForRollover ? 1 : 0, path, "obs", "UseToggleForRollover")

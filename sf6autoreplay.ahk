@@ -50,6 +50,11 @@ NextIntervalMs := 220
 Key_StartRec   := "^{F7}"
 Key_StopRec    := "^{F8}"
 Key_ToggleRec  := "^{F9}"       ; 録画の開始/停止 切替（OBS側で割当）
+OBSControlMode := "hotkey"      ; "hotkey" / "api"
+OBSWebSocketHost := "127.0.0.1"
+OBSWebSocketPort := 4455
+OBSWebSocketPassword := ""
+OBSWebSocketTimeoutMs := 5000
 UseOBSRecording := true
 UseOBSToggleForRollover := true ; ローテはトグル1回で実行
 
@@ -283,6 +288,17 @@ chkUseToggle := main.Add("CheckBox", "x50  y250 w265", "ローテは切替キー
 main.Add("Text", "x70  y270 w265", "オフの場合は録画停止→再開操作")
 chkUseToggle.Value := UseOBSToggleForRollover ? 1 : 0
 chkUseToggle.OnEvent("Click", (*) => (UseOBSToggleForRollover := (chkUseToggle.Value=1)))
+
+main.Add("Text", "x50 y300 w80", "OBS mode")
+ddlObsMode := main.Add("DropDownList", "x125 y296 w90", ["hotkey","api"])
+main.Add("Text", "x225 y300 w35", "host")
+edtObsWsHost := main.Add("Edit", "x260 y296 w95", OBSWebSocketHost)
+main.Add("Text", "x365 y300 w30", "port")
+edtObsWsPort := main.Add("Edit", "x395 y296 w55 Number", OBSWebSocketPort)
+main.Add("Text", "x460 y300 w55", "timeout")
+edtObsWsTimeout := main.Add("Edit", "x515 y296 w60 Number", OBSWebSocketTimeoutMs)
+main.Add("Text", "x50 y330 w70", "WS pass")
+edtObsWsPassword := main.Add("Edit", "x125 y326 w200 Password", OBSWebSocketPassword)
 
 ; ── 検出 / 遷移（右側）
 grpDetect := main.Add("GroupBox", "x355 y70 w330 h250", "検出 / 遷移")
@@ -559,8 +575,8 @@ btnLoad.OnEvent("Click",  (*) => (LoadConfig(ConfigPath), UpdateGuiFromVars(), T
 btnSave.OnEvent("Click",  (*) => (ApplyGuiToVars(), SaveConfig(ConfigPath), TrayTip("保存","設定を保存しました",900)))
 
 btnDetect.OnEvent("Click",(*) => (QuickDetectTest(), RefocusGame()))
-btnOBSon.OnEvent("Click", (*) => (FocusedTriggerOBS(Key_StartRec), RefocusGame()))
-btnOBSoff.OnEvent("Click",(*) => (FocusedTriggerOBS(Key_StopRec),  RefocusGame()))
+btnOBSon.OnEvent("Click", (*) => (OBSStartRecording(), RefocusGame()))
+btnOBSoff.OnEvent("Click",(*) => (OBSStopRecording(),  RefocusGame()))
 btnTestBlack.OnEvent("Click", (*) => (RefocusGame(), TestBlackWait()))
 btnOCRTest.OnEvent("Click", (*) => (RefocusGame(), OCR_TestButton()))
 btnTestName.OnEvent("Click", (*) => (RefocusGame(), OCR_TestResultButton(GameWinSelector)))
@@ -1717,7 +1733,7 @@ ForceStopAutomation() {
     gRunning := false
     gPaused := false
     if UseOBSRecording && gRecording {
-        FocusedTriggerOBS(Key_StopRec)
+        OBSStopRecording()
         gRecording := false
         TrayTip "録画停止", "即時停止しました", 1200
         Log("OBS: stop recording (force)")
@@ -1733,7 +1749,7 @@ RequestSafeStop() {
     global gRunning, gRecording, gSafeStopRequested, UseOBSRecording, Key_StopRec
     if !gRunning {
         if UseOBSRecording && gRecording {
-            FocusedTriggerOBS(Key_StopRec)
+            OBSStopRecording()
             gRecording := false
             TrayTip "録画停止", "（実行外）録画を停止しました", 1200
             Log("OBS: stop recording (out of run)")

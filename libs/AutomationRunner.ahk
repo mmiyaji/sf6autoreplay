@@ -123,7 +123,12 @@ AutomationBeginRun() {
     SlackNotify(BuildSlackStartMessage(), "info")
 
     if UseOBSRecording && !gRecording {
-        FocusedTriggerOBS(Key_StartRec)
+        if !OBSStartRecording() {
+            Log("ERROR: OBS start recording failed; aborting automation")
+            SlackNotify("OBS start recording failed; automation aborted", "warning")
+            gRunning := false
+            return
+        }
         gRecording := true
         gLastRolloverTick := A_TickCount
         StartNewRecordingTextFile("start")
@@ -240,8 +245,12 @@ AutomationWaitForEndUi() {
         }
 
         roi := (gUseFullROI ? GetROI_Full() : GetROI_End_Default(GameWinSelector))
-        if FindAnyImage(Img_Ends, roi, ToleranceEnd, &fx, &fy) or detectHardTimeout {
-            Log("DETECT: end UI at " fx "," fy)
+        endUiDetected := FindAnyImage(Img_Ends, roi, ToleranceEnd, &fx, &fy)
+        if endUiDetected or detectHardTimeout {
+            if endUiDetected
+                Log("DETECT: end UI at " fx "," fy)
+            else
+                Log("DETECT: end UI forced by hard timeout")
             Sleep Delay_BeforeNavigate
 
             EnsureFocusGame()
@@ -290,7 +299,7 @@ AutomationFinalizeRun(stopReason) {
     global gRunning, gSafeStopRequested, gRolloverRequested
 
     if UseOBSRecording && gRecording {
-        FocusedTriggerOBS(Key_StopRec)
+        OBSStopRecording()
         gRecording := false
         TrayTip "録画停止", (stopReason = "safe_stop" ? "安全停止により停止" : "通し録画を停止"), 1200
         Log("OBS: stop recording")
